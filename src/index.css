@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  --color-primary: #6AB57;
+  --color-secondary: #2F4AD;
+  --color-accent-1: #F5A623;
+  --color-accent-2: #E76B55;
+  --color-bg-light: #A9C8D9;
+  --color-bg-light-alt: #A7D3B8;
+
+}
+
+:root {
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  font-weight: 400;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure the root takes full height and applies background color based on theme */
+html,
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
