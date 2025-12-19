@@ -15,15 +15,13 @@ import {
     AlignLeft,
     AlignCenter,
     AlignRight,
-    AlignJustify,
     Link as LinkIcon,
     Highlighter,
     Undo,
     Redo,
     Image as ImageIcon,
     Table as TableIcon,
-    Type,
-    Palette
+    MessageSquare
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -34,9 +32,11 @@ function cn(...inputs: ClassValue[]) {
 
 interface EditorToolbarProps {
     editor: Editor | null;
+    onAddComment?: () => void;
+    rightContent?: React.ReactNode;
 }
 
-export function EditorToolbar({ editor }: EditorToolbarProps) {
+export function EditorToolbar({ editor, onAddComment, rightContent }: EditorToolbarProps) {
     if (!editor) return null;
 
     const ToolbarButton = ({
@@ -210,6 +210,11 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             <ToolbarButton onClick={addImage} title="Image">
                 <ImageIcon className="w-4 h-4" />
             </ToolbarButton>
+            {onAddComment && (
+                <ToolbarButton onClick={onAddComment} title="Add Comment" disabled={editor.state.selection.empty}>
+                    <MessageSquare className="w-4 h-4" />
+                </ToolbarButton>
+            )}
             <ToolbarButton onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()} title="Insert Table">
                 <TableIcon className="w-4 h-4" />
             </ToolbarButton>
@@ -220,6 +225,12 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
             <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive("code")} title="Code">
                 <Code className="w-4 h-4" />
             </ToolbarButton>
+
+            {rightContent && (
+                <div className="ml-auto pl-4 border-l border-gray-200 dark:border-zinc-800 flex items-center">
+                    {rightContent}
+                </div>
+            )}
         </div>
     );
 }

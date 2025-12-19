@@ -4,6 +4,8 @@ import { GoogleButton } from "./GoogleButton";
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
+import { useGoogleLogin } from '@react-oauth/google';
+import { useUserStore } from "../store/useUserStore";
 
 export default function AuthPage() {
     const [view, setView] = useState<"signin" | "signup" | "verify">("signin");
@@ -15,12 +17,41 @@ export default function AuthPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
+    const { fetchUser } = useUserStore();
 
     useEffect(() => {
         if (localStorage.getItem("token")) {
             navigate("/");
         }
     }, [navigate]);
+
+    const handleGoogleLogin = useGoogleLogin({
+        onSuccess: async (tokenResponse) => {
+            setIsLoading(true);
+            try {
+                const response = await fetch("http://localhost:5000/api/auth/google", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ accessToken: tokenResponse.access_token }),
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message || "Google login failed");
+
+                localStorage.setItem("token", data.data.accessToken);
+                localStorage.setItem("refreshToken", data.data.refreshToken);
+                await fetchUser();
+                navigate("/");
+            } catch (err: any) {
+                setError(err.message || "Google auth failed");
+            } finally {
+                setIsLoading(false);
+            }
+        },
+        onError: () => {
+            setError("Google login failed");
+        },
+    });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -38,6 +69,8 @@ export default function AuthPage() {
                 if (!response.ok) throw new Error(data.message || "Verification failed");
 
                 localStorage.setItem("token", data.data.accessToken);
+                localStorage.setItem("refreshToken", data.data.refreshToken);
+                await fetchUser();
                 navigate("/");
                 return;
             }
@@ -61,6 +94,8 @@ export default function AuthPage() {
 
             if (view === "signin") {
                 localStorage.setItem("token", data.data.accessToken);
+                localStorage.setItem("refreshToken", data.data.refreshToken);
+                await fetchUser();
                 navigate("/");
             } else {
                 setView("verify");
@@ -133,7 +168,7 @@ export default function AuthPage() {
                 <div className="space-y-4">
                     {view !== "verify" && (
                         <>
-                            <GoogleButton onClick={() => console.log("Google Auth Clicked")} />
+                            <GoogleButton onClick={() => handleGoogleLogin()} />
 
                             <div className="relative">
                                 <div className="absolute inset-0 flex items-center">

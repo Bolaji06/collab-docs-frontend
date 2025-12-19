@@ -1,7 +1,7 @@
 
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { useNavigate, useSearchParams, Link } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { ThemeToggle } from "./ThemeToggle";
 
 export default function ForgotPasswordPage() {

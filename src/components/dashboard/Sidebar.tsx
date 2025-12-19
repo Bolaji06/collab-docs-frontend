@@ -2,7 +2,8 @@
 import { Home, Clock, Users, Trash, Settings, LogOut } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
-import logo from "../../../public/logo_1.png"
+
+const logo = "/logo_1.png";
 
 export function Sidebar() {
     const location = useLocation();
@@ -18,11 +19,11 @@ export function Sidebar() {
     return (
         <div className="w-64 h-screen bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col transition-colors duration-300">
             <div className="p-6">
-                <div className="flex flex-col items-center justify-center gap-2 mb-8">
-                    <div className="w-12 h-12 rounded-lg flex items-center justify-center">
-                        <img src={logo} alt="collab-docs logo" className="flex justify-center items-center w-full h-full object-contain" />
+                <div className="flex flex-col items-center justify-center gap-3 mb-8">
+                    <div className="w-10 h-10 flex items-center justify-center">
+                        <img src={logo} alt="CollabDocs" className="w-full h-full object-contain" />
                     </div>
-                    <span className="text-xl justify-start font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-zinc-400">
+                    <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600 dark:from-white dark:to-zinc-400">
                         CollabDocs
                     </span>
                 </div>
@@ -53,10 +54,16 @@ export function Sidebar() {
             </div>
 
             <div className="mt-auto p-6 border-t border-gray-200 dark:border-zinc-800">
-                <button className="flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-200 transition-all duration-200">
+                <Link
+                    to="/settings"
+                    className={`flex items-center gap-3 px-4 py-3 w-full rounded-xl text-sm font-medium transition-all duration-200 ${isActive("/settings")
+                        ? "bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                        : "text-gray-600 dark:text-zinc-400 hover:bg-gray-50 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-zinc-200"
+                        }`}
+                >
                     <Settings className="w-5 h-5" />
                     Settings
-                </button>
+                </Link>
                 <button
                     onClick={() => {
                         localStorage.removeItem('token');

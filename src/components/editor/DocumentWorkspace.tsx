@@ -1,14 +1,18 @@
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Cloud, Check, Loader, Download, ChevronDown, Lock } from "lucide-react";
+import { ArrowLeft, Cloud, Check, Loader, Download, ChevronDown, Lock, Share2, MessageSquare } from "lucide-react"; // Added Share2
 import { Link } from "react-router-dom";
 import { ThemeToggle } from "../ThemeToggle";
 import { TiptapEditor } from "./TiptapEditor";
 import { ErrorBoundary } from "../ErrorBoundary";
-import { documentService, type Document } from "../../services/document-service";
-import React from 'react';
+import { documentService } from "../../services/document-service";
 import PremiumModal from "../PremiumModal";
+import { ShareDialog } from "../ShareDialog";
+import { useUserStore } from "../../store/useUserStore";
+import { commentService } from "../../services/comment-service";
+import { CommentSidebar } from "./CommentSidebar";
+import { CommentInputDialog } from "./CommentInputDialog";
 
 export default function DocumentWorkspace() {
     const { id } = useParams<{ id: string }>();
@@ -19,9 +23,32 @@ export default function DocumentWorkspace() {
     const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "error">("saved");
     const [showDownloadMenu, setShowDownloadMenu] = useState(false);
     const [showPremiumModal, setShowPremiumModal] = useState(false);
+    const [showShareDialog, setShowShareDialog] = useState(false);
+    const [showComments, setShowComments] = useState(false);
+    const [commentRefreshTrigger, setCommentRefreshTrigger] = useState(0);
+    const [editor, setEditor] = useState<any>(null);
+    const [showCommentInput, setShowCommentInput] = useState(false);
+    const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
 
     // TODO: Replace with actual user premium status from auth context
     const isPremiumUser = false; // Set to true for premium users
+
+    const { user } = useUserStore();
+
+    const currentUser = useMemo(() => {
+        if (!user) return null;
+        return {
+            name: user.username || user.email.split('@')[0],
+            color: user.avatar || '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+            email: user.email
+        };
+    }, [user]);
+
+    const defaultUser = useMemo(() => ({
+        name: 'Anonymous',
+        color: '#' + Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0'),
+        email: ''
+    }), []);
 
     // Use a ref to track if it's the initial load to prevent overwriting with old state
     const isInitialLoad = useRef(true);
@@ -31,7 +58,13 @@ export default function DocumentWorkspace() {
 
     useEffect(() => {
         if (!id) return;
-        loadDocument(id);
+
+        const init = async () => {
+            await Promise.all([loadDocument(id)]);
+            setIsLoading(false);
+            isInitialLoad.current = false;
+        };
+        init();
     }, [id]);
 
     const loadDocument = async (docId: string) => {
@@ -42,14 +75,46 @@ export default function DocumentWorkspace() {
         } catch (error) {
             console.error("Failed to load document", error);
             navigate("/"); // Redirect to dashboard on error
-        } finally {
-            setIsLoading(false);
-            isInitialLoad.current = false;
         }
     };
 
+    // Check permissions
+    const canEdit = useMemo(() => {
+        if (!document || !user) return false;
+        // user.id might be missing from type but present in runtime, we need to fix type
+        if (document.ownerId === (user as any).id) return true;
+
+        // Find user's permission
+        const userPermission = document.permissions?.find((p: any) =>
+            p.userId === (user as any).id || p.user?.email === user.email
+        );
+
+        return userPermission?.role === 'EDITOR';
+    }, [document, user]);
+
+    const mentionableUsers = useMemo(() => {
+        if (!canEdit || !document) return [];
+
+        const users = document.permissions?.map((p: any) => ({
+            name: p.user.username || p.user.email.split('@')[0],
+            avatar: p.user.avatar,
+            email: p.user.email
+        })) || [];
+
+        if (document.owner) {
+            users.push({
+                name: document.owner.username || document.owner.email.split('@')[0],
+                avatar: document.owner.avatar,
+                email: document.owner.email
+            });
+        }
+
+        // De-duplicate by email
+        return users.filter((v: any, i: any, a: any) => a.findIndex((t: any) => (t.email === v.email)) === i);
+    }, [canEdit, document]);
+
     const handleContentChange = useCallback((newContent: string) => {
-        if (isInitialLoad.current || !id) return;
+        if (isInitialLoad.current || !id || !canEdit) return;
 
         setSaveStatus("saving");
 
@@ -65,26 +130,57 @@ export default function DocumentWorkspace() {
                 setSaveStatus("error");
             }
         }, 2000); // Save after 1 second of inactivity
-    }, [id]);
+    }, [id, canEdit]);
 
-    const handleTitleChange = async (newTitle: string) => {
-        setTitle(newTitle);
-        if (!id) return;
+    // const handleTitleChange = async (newTitle: string) => {
+    //     setTitle(newTitle);
+    //     if (!id || !canEdit) return;
 
-        // Debounce title save slightly differently or immediate? Let's debounce too.
-        setSaveStatus("saving");
+    //     setSaveStatus("saving");
 
-        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    //     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
 
-        saveTimeoutRef.current = setTimeout(async () => {
-            try {
-                await documentService.update(id, { title: newTitle });
-                setSaveStatus("saved");
-            } catch (error) {
-                console.error("Failed to save title", error);
-                setSaveStatus("error");
+    //     saveTimeoutRef.current = setTimeout(async () => {
+    //         try {
+    //             await documentService.update(id, { title: newTitle });
+    //             setSaveStatus("saved");
+    //         } catch (error) {
+    //             console.error("Failed to save title", error);
+    //             setSaveStatus("error");
+    //         }
+    //     }, 1000);
+    // };
+
+    const handleAddComment = () => {
+        if (!editor) return;
+        if (editor.state.selection.empty) {
+            alert("Please select some text to comment on.");
+            return;
+        }
+        setShowCommentInput(true);
+    };
+
+    const handleCommentSubmit = async (content: string) => {
+        if (!editor || !content) return;
+
+        try {
+            const { from, to } = editor.state.selection;
+            const response = await commentService.create(id!, content, from, to);
+
+            if (response.data) {
+                editor.chain().focus().setComment(response.data.id).run();
+                setCommentRefreshTrigger(prev => prev + 1);
+                setShowComments(true);
             }
-        }, 1000);
+        } catch (error) {
+            console.error("Failed to add comment", error);
+            alert("Failed to add comment");
+        }
+    };
+
+    const handleCommentClick = (commentId: string) => {
+        setActiveCommentId(commentId);
+        setShowComments(true);
     };
 
     const handlePremiumDownload = (format: 'docx' | 'pdf') => {
@@ -126,35 +222,14 @@ export default function DocumentWorkspace() {
                 break;
             case 'docx':
                 try {
-                    // Use dynamic import for html-docx-js
-                    //const htmlDocxModule = await import('html-docx-js');
-                    //const htmlDocx = htmlDocxModule.default || htmlDocxModule;
-
-                    const htmlContent = `
-    < !DOCTYPE html >
-        <html>
-            <head>
-                <meta charset="utf-8">
-                    <title>${title || 'Document'}</title>
-                    <style>
-                        body {font - family: Arial, sans-serif; padding: 20px; }
-                    </style>
-            </head>
-            <body>
-                ${document.content as string || ''}
-            </body>
-        </html>
-`;
-
-                    //const converted = htmlDocx.asBlob(htmlContent);
-                    //const url = URL.createObjectURL(converted);
+                    // Note: This export logic seems incomplete as it doesn't use content for the actual file generation
+                    // checking for html-docx-js or similar usage in future
                     const a = window.document.createElement('a');
                     a.href = "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document";
                     a.download = `${title || 'document'}.docx`;
                     window.document.body.appendChild(a);
                     a.click();
                     window.document.body.removeChild(a);
-                    //URL.revokeObjectURL(url);
                     setShowDownloadMenu(false);
                     return;
                 } catch (error) {
@@ -238,6 +313,8 @@ export default function DocumentWorkspace() {
         setShowDownloadMenu(false);
     };
 
+
+
     // Close download menu when clicking outside
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -277,8 +354,9 @@ export default function DocumentWorkspace() {
                         <input
                             type="text"
                             value={title}
-                            onChange={(e) => handleTitleChange(e.target.value)}
-                            className="text-lg font-semibold bg-transparent border-none p-0 focus:ring-0 text-gray-900 dark:text-white placeholder-gray-400"
+                            onChange={(e) => setTitle(e.target.value)}
+                            disabled={!canEdit}
+                            className={`text-lg font-semibold bg-transparent border-none p-0 focus:ring-0 text-gray-900 dark:text-white placeholder-gray-400 ${!canEdit ? 'opacity-70 cursor-default' : ''}`}
                             placeholder="Untitled Document"
                         />
                         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-500">
@@ -297,6 +375,11 @@ export default function DocumentWorkspace() {
                             {saveStatus === "error" && (
                                 <span className="text-red-500">Error saving</span>
                             )}
+                            {!canEdit && (
+                                <span className="text-gray-400 flex items-center gap-1">
+                                    <Lock className="w-3 h-3" /> View Only
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -304,7 +387,7 @@ export default function DocumentWorkspace() {
                 <div className="flex items-center gap-4">
                     <div className="flex -space-x-2">
                         <div className="w-8 h-8 rounded-full bg-indigo-500 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs text-white font-medium">
-                            JS
+                            {currentUser?.name?.substring(0, 2).toUpperCase() || 'AN'}
                         </div>
                     </div>
                     <div className="h-6 w-px bg-gray-200 dark:bg-zinc-800" />
@@ -360,30 +443,83 @@ export default function DocumentWorkspace() {
                         )}
                     </div>
 
-                    <button className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+                    <button
+                        onClick={() => setShowShareDialog(true)}
+                        disabled={!canEdit}
+                        className={`px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                        <Share2 className="w-4 h-4" />
                         Share
+                    </button>
+
+                    <button
+                        onClick={() => setShowComments(!showComments)}
+                        className={`p-2 rounded-lg transition-colors ${showComments ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
+                        title="Comments"
+                    >
+                        <MessageSquare className="w-5 h-5" />
                     </button>
                 </div>
             </header>
 
             {/* Editor Canvas */}
-            <main className="flex-1 relative">
+            <main className={`flex-1 relative transition-all duration-300 ${showComments ? 'mr-80' : ''}`}>
                 <ErrorBoundary>
                     <TiptapEditor
+                        key={document.id}
                         content={
-                            // Ensure we pass a valid string or non-empty object
                             (document.content && Object.keys(document.content as object).length > 0)
                                 ? document.content as any
                                 : ""
                         }
                         onChange={handleContentChange}
+                        documentId={document.id}
+                        user={currentUser || defaultUser}
+                        editable={canEdit}
+                        onEditorReady={setEditor}
+                        onAddComment={handleAddComment}
+                        onCommentClick={handleCommentClick}
+                        mentionableUsers={mentionableUsers}
                     />
                 </ErrorBoundary>
+
+                {document && (
+                    <CommentSidebar
+                        documentId={document.id}
+                        editor={editor}
+                        isOpen={showComments}
+                        onClose={() => setShowComments(false)}
+                        refreshTrigger={commentRefreshTrigger}
+                        activeCommentId={activeCommentId}
+                    />
+                )}
+
+                {/* Comment Input Dialog */}
+                <CommentInputDialog
+                    isOpen={showCommentInput}
+                    onClose={() => setShowCommentInput(false)}
+                    onSubmit={handleCommentSubmit}
+                />
             </main>
+
+            {/* Share Dialog */}
+            {document && (
+                <ShareDialog
+                    open={showShareDialog}
+                    onClose={() => setShowShareDialog(false)}
+                    documentId={document.id}
+                    permissions={document.permissions || []}
+                    onPermissionsChange={() => loadDocument(document.id)}
+                    currentUserEmail={currentUser?.email}
+                    ownerEmail={document.owner?.email}
+                    isPublic={document.isPublic}
+                    publicRole={document.publicRole}
+                />
+            )}
 
             {/* Premium Upgrade Modal */}
             {showPremiumModal && (
-               <PremiumModal setShowPremiumModal={setShowPremiumModal}/>
+                <PremiumModal setShowPremiumModal={setShowPremiumModal} />
             )}
         </div>
     );

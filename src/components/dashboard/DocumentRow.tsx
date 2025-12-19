@@ -1,5 +1,5 @@
 
-import { FileText, MoreHorizontal, Trash, ExternalLink } from "lucide-react";
+import { FileText, MoreHorizontal, Trash, ExternalLink, Pencil } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 
@@ -9,9 +9,10 @@ interface DocumentRowProps {
     date: string;
     onClick: () => void;
     onDelete?: () => void;
+    onRename?: () => void;
 }
 
-export function DocumentRow({ title, owner, date, onClick, onDelete }: DocumentRowProps) {
+export function DocumentRow({ title, owner, date, onClick, onDelete, onRename }: DocumentRowProps) {
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -35,6 +36,12 @@ export function DocumentRow({ title, owner, date, onClick, onDelete }: DocumentR
         e.stopPropagation();
         setShowMenu(false);
         onDelete?.();
+    };
+
+    const handleRename = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setShowMenu(false);
+        onRename?.();
     };
 
     return (
@@ -91,6 +98,13 @@ export function DocumentRow({ title, owner, date, onClick, onDelete }: DocumentR
                                 >
                                     <ExternalLink className="w-4 h-4" />
                                     Open
+                                </button>
+                                <button
+                                    onClick={handleRename}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg"
+                                >
+                                    <Pencil className="w-4 h-4" />
+                                    Rename
                                 </button>
                                 <button
                                     onClick={handleDelete}
