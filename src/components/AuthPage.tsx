@@ -7,7 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useUserStore } from "../store/useUserStore";
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com/api';
 
 export default function AuthPage() {
     const [view, setView] = useState<"signin" | "signup" | "verify">("signin");
@@ -31,7 +31,7 @@ export default function AuthPage() {
         onSuccess: async (tokenResponse) => {
             setIsLoading(true);
             try {
-                const response = await fetch(`${API_URL}/api/auth/google`, {
+                const response = await fetch(`${API_URL}/auth/google`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ accessToken: tokenResponse.access_token }),
@@ -62,7 +62,7 @@ export default function AuthPage() {
 
         try {
             if (view === "verify") {
-                const response = await fetch(`${API_URL}/api/auth/verify-email`, {
+                const response = await fetch(`${API_URL}/auth/verify-email`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ email, otp }),
@@ -82,7 +82,7 @@ export default function AuthPage() {
                 ? { email, password }
                 : { email, password, username };
 
-            const response = await fetch(`${API_URL}/api/auth${endpoint}`, {
+            const response = await fetch(`${API_URL}/auth${endpoint}`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),

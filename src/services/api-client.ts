@@ -1,5 +1,5 @@
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com';
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
