@@ -461,7 +461,7 @@ export function TiptapEditor(props: TiptapEditorProps) {
         }
 
         try {
-            const socketUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            const socketUrl = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com';
             const newProvider = new SocketIOProvider(
                 socketUrl,
                 documentId,
