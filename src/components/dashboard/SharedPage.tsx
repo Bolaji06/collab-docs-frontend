@@ -33,15 +33,15 @@ export default function SharedPage() {
     };
 
     // Filter documents based on search query
-    const filteredDocuments = documents.filter(doc =>
+    const filteredDocuments = documents?.filter(doc =>
         doc.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const displayDocs = filteredDocuments.map(doc => ({
+    const displayDocs = filteredDocuments?.map(doc => ({
         id: doc.id,
         title: doc.title,
-        owner: doc.owner?.username || "Unknown",
-        date: new Date(doc.updatedAt).toLocaleString()
+        owner: doc.owner || { username: "Unknown", email: "" },
+        lastEdited: new Date(doc.updatedAt).toLocaleString()
     }));
 
     if (isLoading || isUserLoading) {
@@ -63,7 +63,7 @@ export default function SharedPage() {
                 </p>
             </div>
 
-            {documents.length === 0 ? (
+            {documents?.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <div className="w-24 h-24 bg-indigo-50 dark:bg-zinc-800/50 rounded-full flex items-center justify-center mb-6">
                         <Users className="w-10 h-10 text-indigo-400" />
@@ -113,7 +113,7 @@ export default function SharedPage() {
                             </div>
 
                             <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
-                                {displayDocs.length === 0 ? (
+                                {!displayDocs || displayDocs.length === 0 ? (
                                     <div className="p-12 text-center text-gray-500 dark:text-zinc-500">
                                         <p>No documents matching "{searchQuery}"</p>
                                     </div>
@@ -126,9 +126,10 @@ export default function SharedPage() {
                                             transition={{ delay: index * 0.05 }}
                                         >
                                             <DocumentRow
+                                                id={doc.id}
                                                 title={doc.title}
                                                 owner={doc.owner}
-                                                date={doc.date}
+                                                lastEdited={doc.lastEdited}
                                                 onClick={() => navigate(`/doc/${doc.id}`)}
                                             // No delete/rename for shared docs usually, unless editor permissions allow. 
                                             // For now, keep it simple: just view/open.
@@ -140,7 +141,7 @@ export default function SharedPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {displayDocs.length === 0 ? (
+                            {!displayDocs || displayDocs.length === 0 ? (
                                 <div className="col-span-full py-12 text-center text-gray-500 dark:text-zinc-500">
                                     <p>No documents matching "{searchQuery}"</p>
                                 </div>
@@ -153,8 +154,9 @@ export default function SharedPage() {
                                         transition={{ delay: index * 0.05 }}
                                     >
                                         <DocumentCard
+                                            id={doc.id}
                                             title={doc.title}
-                                            lastEdited={doc.date}
+                                            lastEdited={doc.lastEdited}
                                             onClick={() => navigate(`/doc/${doc.id}`)}
                                             icon={<Users className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />}
                                         />

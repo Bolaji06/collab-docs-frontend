@@ -58,11 +58,11 @@ export default function TrashPage() {
     };
 
     // Filter documents based on search query
-    const filteredDocuments = documents.filter(doc =>
+    const filteredDocuments = documents?.filter(doc =>
         doc.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const displayDocs = filteredDocuments.map(doc => ({
+    const displayDocs = filteredDocuments?.map(doc => ({
         id: doc.id,
         title: doc.title,
         owner: doc.owner?.username || "Me",
@@ -88,7 +88,7 @@ export default function TrashPage() {
                 </p>
             </div>
 
-            {documents.length === 0 ? (
+            {documents?.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                     <div className="w-24 h-24 bg-red-50 dark:bg-red-500/10 rounded-full flex items-center justify-center mb-6">
                         <Trash2 className="w-10 h-10 text-red-400" />
@@ -138,7 +138,7 @@ export default function TrashPage() {
                             </div>
 
                             <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
-                                {displayDocs.length === 0 ? (
+                                {!displayDocs || displayDocs.length === 0 ? (
                                     <div className="p-12 text-center text-gray-500 dark:text-zinc-500">
                                         <p>No documents matching "{searchQuery}"</p>
                                     </div>
@@ -196,43 +196,49 @@ export default function TrashPage() {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            {displayDocs.map((doc, index) => (
-                                <motion.div
-                                    key={doc.id}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: index * 0.05 }}
-                                    className="group relative p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl hover:border-red-500/30 dark:hover:border-red-500/30 hover:shadow-lg transition-all"
-                                >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="p-2.5 bg-red-50 dark:bg-red-500/10 rounded-xl">
-                                            <Trash2 className="w-6 h-6 text-red-500" />
+                            {!displayDocs || displayDocs.length === 0 ? (
+                                <div className="col-span-full py-12 text-center text-gray-500 dark:text-zinc-500">
+                                    <p>No documents matching "{searchQuery}"</p>
+                                </div>
+                            ) : (
+                                displayDocs.map((doc, index) => (
+                                    <motion.div
+                                        key={doc.id}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: index * 0.05 }}
+                                        className="group relative p-5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-2xl hover:border-red-500/30 dark:hover:border-red-500/30 hover:shadow-lg transition-all"
+                                    >
+                                        <div className="flex items-start justify-between mb-4">
+                                            <div className="p-2.5 bg-red-50 dark:bg-red-500/10 rounded-xl">
+                                                <Trash2 className="w-6 h-6 text-red-500" />
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <button
+                                                    onClick={(e) => handleRestore(doc.id, e)}
+                                                    className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg"
+                                                    title="Restore"
+                                                >
+                                                    <RotateCcw className="w-4 h-4" />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => handlePermanentDelete(doc.id, e)}
+                                                    className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
+                                                    title="Delete Permanently"
+                                                >
+                                                    <XCircle className="w-4 h-4" />
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-1">
-                                            <button
-                                                onClick={(e) => handleRestore(doc.id, e)}
-                                                className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 rounded-lg"
-                                                title="Restore"
-                                            >
-                                                <RotateCcw className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={(e) => handlePermanentDelete(doc.id, e)}
-                                                className="p-1.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
-                                                title="Delete Permanently"
-                                            >
-                                                <XCircle className="w-4 h-4" />
-                                            </button>
+                                        <h3 className="font-semibold text-gray-900 dark:text-white mb-1 line-clamp-1">
+                                            {doc.title}
+                                        </h3>
+                                        <div className="text-xs text-gray-500 dark:text-zinc-500">
+                                            Deleted {doc.date}
                                         </div>
-                                    </div>
-                                    <h3 className="font-semibold text-gray-900 dark:text-white mb-1 line-clamp-1">
-                                        {doc.title}
-                                    </h3>
-                                    <div className="text-xs text-gray-500 dark:text-zinc-500">
-                                        Deleted {doc.date}
-                                    </div>
-                                </motion.div>
-                            ))}
+                                    </motion.div>
+                                ))
+                            )}
                         </div>
                     )}
                 </section>

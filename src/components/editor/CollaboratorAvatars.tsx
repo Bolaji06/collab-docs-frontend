@@ -8,6 +8,7 @@ interface CollaboratorAvatarsProps {
     user: {
         name: string;
         color: string;
+        avatar?: string;
     };
 }
 
@@ -16,7 +17,9 @@ interface AwarenessState {
     user: {
         name: string;
         color: string;
+        avatar?: string;
     };
+    isTyping?: boolean;
 }
 
 export function CollaboratorAvatars({ provider, editor }: CollaboratorAvatarsProps) {
@@ -37,6 +40,7 @@ export function CollaboratorAvatars({ provider, editor }: CollaboratorAvatarsPro
                     active.push({
                         clientId,
                         user: state.user,
+                        isTyping: !!state.isTyping,
                     });
                 }
             });
@@ -77,21 +81,35 @@ export function CollaboratorAvatars({ provider, editor }: CollaboratorAvatarsPro
 
     return (
         <div className="flex items-center -space-x-2 mr-4">
-            {collaborators.slice(0, 5).map(({ clientId, user }) => (
+            {collaborators.slice(0, 5).map(({ clientId, user, isTyping }) => (
                 <div
                     key={clientId}
                     className="relative group cursor-pointer"
                     onClick={() => handleJumpToUser(clientId)}
                 >
                     <div
-                        className="w-8 h-8 rounded-full border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs font-medium text-white shadow-sm transition-transform hover:scale-110 hover:z-10"
+                        className={`w-8 h-8 rounded-full border-2 border-white dark:border-zinc-900 flex items-center justify-center text-xs font-medium text-white shadow-sm transition-all duration-300 hover:scale-110 hover:z-10 overflow-hidden relative ${isTyping ? 'ring-2 ring-indigo-500 ring-offset-2 dark:ring-offset-zinc-900 animate-pulse' : ''}`}
                         style={{ backgroundColor: user.color }}
                     >
-                        {user.name.charAt(0).toUpperCase()}
+                        {user.avatar ? (
+                            <img src={user.avatar} alt={user.name} className="w-full h-full object-cover" />
+                        ) : (
+                            user.name.charAt(0).toUpperCase()
+                        )}
+                        {isTyping && (
+                            <div className="absolute inset-0 bg-indigo-500/20 backdrop-blur-[1px] flex items-center justify-center">
+                                <span className="flex gap-0.5">
+                                    <span className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                    <span className="w-1 h-1 bg-white rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                    <span className="w-1 h-1 bg-white rounded-full animate-bounce"></span>
+                                </span>
+                            </div>
+                        )}
                     </div>
                     {/* Tooltip */}
-                    <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-black/80 text-white text-[10px] py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-20">
-                        {user.name}
+                    <div className="absolute top-10 left-1/2 -translate-x-1/2 bg-white dark:bg-zinc-800 text-gray-900 dark:text-white text-[11px] font-bold py-1.5 px-3 rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-all transform scale-90 group-hover:scale-100 whitespace-nowrap pointer-events-none z-20 border border-gray-100 dark:border-zinc-700 flex flex-col items-center">
+                        <span>{user.name}</span>
+                        {isTyping && <span className="text-[9px] text-indigo-500 dark:text-indigo-400 font-medium">Writing...</span>}
                     </div>
                 </div>
             ))}

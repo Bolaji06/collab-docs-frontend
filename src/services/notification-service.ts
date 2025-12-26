@@ -14,14 +14,22 @@ export interface Notification {
 
 export const notificationService = {
     getAll: async () => {
-        return apiClient.get<Notification[]>('/notifications');
+        const response = await apiClient.get<Notification[]>('/notifications');
+        return response;
     },
 
     markAsRead: async (id: string) => {
-        return apiClient.put<Notification>(`/notifications/${id}/read`, {});
+        const response = await apiClient.put<Notification>(`/notifications/${id}/read`, {});
+        return response;
     },
 
     markAllAsRead: async () => {
-        return apiClient.put<{ message: string }>('/notifications/read-all', {});
+        const response = await apiClient.put<{ message: string }>('/notifications/read-all', {});
+        return response;
+    },
+
+    sendNudge: async (data: { userIds: string[]; documentId: string; documentTitle: string }) => {
+        const response = await apiClient.post<{ message: string }>('/notifications/send-nudge', data);
+        return response;
     }
 };

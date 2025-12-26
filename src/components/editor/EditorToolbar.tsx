@@ -21,7 +21,8 @@ import {
     Redo,
     Image as ImageIcon,
     Table as TableIcon,
-    MessageSquare
+    MessageSquare,
+    History as HistoryIcon
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -33,10 +34,11 @@ function cn(...inputs: ClassValue[]) {
 interface EditorToolbarProps {
     editor: Editor | null;
     onAddComment?: () => void;
+    onShowHistory?: () => void;
     rightContent?: React.ReactNode;
 }
 
-export function EditorToolbar({ editor, onAddComment, rightContent }: EditorToolbarProps) {
+export function EditorToolbar({ editor, onAddComment, onShowHistory, rightContent }: EditorToolbarProps) {
     if (!editor) return null;
 
     const ToolbarButton = ({
@@ -104,6 +106,14 @@ export function EditorToolbar({ editor, onAddComment, rightContent }: EditorTool
                 >
                     <Redo className="w-4 h-4" />
                 </ToolbarButton>
+                {onShowHistory && (
+                    <ToolbarButton
+                        onClick={onShowHistory}
+                        title="Version History"
+                    >
+                        <HistoryIcon className="w-4 h-4" />
+                    </ToolbarButton>
+                )}
             </div>
 
             <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-2" />

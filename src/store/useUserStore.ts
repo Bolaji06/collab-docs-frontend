@@ -6,6 +6,7 @@ interface User {
     username: string;
     email: string;
     avatar?: string;
+    isPremium: boolean;
     // Add other user fields as needed
 }
 
@@ -25,7 +26,7 @@ export const useUserStore = create<UserState>((set) => ({
     fetchUser: async () => {
         set({ isLoading: true, error: null });
         try {
-            const response = await apiClient.get<any>('/auth/me');
+            const response = await apiClient.get<{ success: boolean; data: User }>('/auth/me');
             if (response.success && response.data) {
                 set({ user: response.data, isLoading: false, error: null });
             } else {

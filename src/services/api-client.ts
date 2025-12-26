@@ -1,5 +1,5 @@
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com';
+const API_URL = import.meta.env.DEV ? import.meta.env.VITE_DEV_API_URL : import.meta.env.VITE_API_URL;
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
 
@@ -72,7 +72,22 @@ async function request<T>(endpoint: string, method: RequestMethod = 'GET', body?
 }
 
 export const apiClient = {
-    get: <T>(endpoint: string) => request<T>(endpoint, 'GET'),
+    get: <T>(endpoint: string, config?: { params?: Record<string, any> }) => {
+        let url = endpoint;
+        if (config?.params) {
+            const params = new URLSearchParams();
+            Object.entries(config.params).forEach(([key, value]) => {
+                if (value !== undefined && value !== null) {
+                    params.append(key, String(value));
+                }
+            });
+            const queryString = params.toString();
+            if (queryString) {
+                url += (url.includes('?') ? '&' : '?') + queryString;
+            }
+        }
+        return request<T>(url, 'GET');
+    },
     post: <T>(endpoint: string, body: any) => request<T>(endpoint, 'POST', body),
     put: <T>(endpoint: string, body: any) => request<T>(endpoint, 'PUT', body),
     patch: <T>(endpoint: string, body: any) => request<T>(endpoint, 'PATCH', body),

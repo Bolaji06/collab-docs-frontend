@@ -7,7 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { useGoogleLogin } from '@react-oauth/google';
 import { useUserStore } from "../store/useUserStore";
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://collab-docs-backend-32yq.onrender.com/api';
+const API_URL = import.meta.env.DEV ? import.meta.env.VITE_DEV_API_URL : import.meta.env.VITE_API_URL;
 
 export default function AuthPage() {
     const [view, setView] = useState<"signin" | "signup" | "verify">("signin");

@@ -7,7 +7,7 @@ export const MentionList = forwardRef((props: any, ref) => {
         const item = props.items[index];
 
         if (item) {
-            props.command({ id: item });
+            props.command({ id: item.id, label: item.name });
         }
     };
 
@@ -62,7 +62,7 @@ export const MentionList = forwardRef((props: any, ref) => {
                             <img src={item.avatar} alt={item.name} className="w-5 h-5 rounded-full object-cover" />
                         ) : (
                             <div className="w-5 h-5 rounded-full bg-indigo-100 flex items-center justify-center text-[10px] font-medium text-indigo-600">
-                                {item.name.charAt(0).toUpperCase()}
+                                {item?.name?.charAt(0).toUpperCase()}
                             </div>
                         )}
                         {item.name}

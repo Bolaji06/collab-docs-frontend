@@ -26,31 +26,51 @@ export interface Document {
             avatar: string | null;
         };
     }[];
+    folderId?: string | null;
+    folder?: {
+        id: string;
+        name: string;
+    };
+    tags?: {
+        tag: {
+            id: string;
+            name: string;
+            color: string | null;
+        }
+    }[];
 }
 
 export const documentService = {
-    getAll: async () => {
-        return apiClient.get<Document[]>('/documents');
+    getAll: async (options: { search?: string; folderId?: string; tagId?: string; workspaceId?: string } = {}): Promise<Document[]> => {
+        const response = await apiClient.get<Document[]>('/documents', {
+            params: options
+        });
+        return response;
     },
 
     getShared: async () => {
-        return apiClient.get<Document[]>('/documents/shared');
+        const response = await apiClient.get<Document[]>('/documents/shared');
+        return response;
     },
 
     getDeleted: async () => {
-        return apiClient.get<Document[]>('/documents/trash');
+        const response = await apiClient.get<Document[]>('/documents/trash');
+        return response;
     },
 
     getById: async (id: string) => {
-        return apiClient.get<Document>(`/documents/${id}`);
+        const response = await apiClient.get<Document>(`/documents/${id}`);
+        return response;
     },
 
-    create: async (title: string) => {
-        return apiClient.post<Document>('/documents', { title });
+    create: async (title: string, folderId?: string | null, workspaceId?: string | null) => {
+        const response = await apiClient.post<Document>('/documents', { title, folderId, workspaceId });
+        return response;
     },
 
     update: async (id: string, updates: Partial<Document>) => {
-        return apiClient.put<Document>(`/documents/${id}`, updates);
+        const response = await apiClient.put<Document>(`/documents/${id}`, updates);
+        return response;
     },
 
     delete: async (id: string) => {

@@ -1,18 +1,27 @@
-
-import { FileText, MoreHorizontal, Trash, ExternalLink, Pencil } from "lucide-react";
+import { FileText, Clock, MoreHorizontal, ExternalLink, Pencil, Trash, FolderInput, User } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useRef, useEffect } from "react";
 
 interface DocumentRowProps {
+    id: string;
     title: string;
-    owner: string;
-    date: string;
-    onClick: () => void;
+    lastEdited: string;
+    owner?: {
+        username: string;
+        email: string;
+        avatar?: string | null;
+    };
+    tags?: { tag: { name: string; color: string | null } }[];
+    onClick?: () => void;
     onDelete?: () => void;
     onRename?: () => void;
+    onMove?: () => void;
 }
 
-export function DocumentRow({ title, owner, date, onClick, onDelete, onRename }: DocumentRowProps) {
+import { useDragStore } from "../../store/useDragStore";
+
+export function DocumentRow({ id, title, lastEdited, owner, tags, onClick, onDelete, onRename, onMove }: DocumentRowProps) {
+    const { setDraggedItem, clearDraggedItem } = useDragStore();
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -32,51 +41,78 @@ export function DocumentRow({ title, owner, date, onClick, onDelete, onRename }:
         setShowMenu(!showMenu);
     };
 
-    const handleDelete = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setShowMenu(false);
-        onDelete?.();
-    };
-
-    const handleRename = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        setShowMenu(false);
-        onRename?.();
-    };
-
     return (
         <motion.div
             layout
+            drag
+            dragSnapToOrigin
+            dragElastic={0.05}
+            whileDrag={{
+                scale: 1.05,
+                zIndex: 9999,
+                boxShadow: "0 20px 25px -5px rgb(0 0 0 / 0.2)",
+                pointerEvents: "none"
+            }}
+            onDragStart={() => setDraggedItem(id, title)}
+            onDragEnd={() => setTimeout(clearDraggedItem, 100)}
             onClick={onClick}
-            whileHover={{ backgroundColor: "rgba(99, 102, 241, 0.03)" }}
-            className="grid grid-cols-[2fr_1fr_1fr_auto] gap-4 items-center p-4 border-b border-gray-100 dark:border-zinc-800/50 hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer group relative"
+            className="group grid grid-cols-[2fr_1fr_1fr_auto] gap-4 p-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl hover:border-indigo-500/30 dark:hover:border-indigo-500/30 hover:shadow-md transition-all duration-200 cursor-pointer items-center touch-none"
         >
             <div className="flex items-center gap-4 min-w-0">
-                <div className="p-2 shrink-0 bg-gray-100 dark:bg-zinc-800 rounded-lg text-gray-500 dark:text-zinc-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    <FileText className="w-5 h-5" />
+                <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/20 transition-colors shrink-0">
+                    <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 </div>
-                <div className="min-w-0 truncate">
-                    <h4 className="font-medium text-gray-900 dark:text-white text-sm truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        {title}
-                    </h4>
-                    <p className="text-xs text-gray-500 dark:text-zinc-500 sm:hidden">
-                        {date}
-                    </p>
+
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3">
+                        <h3 className="font-semibold text-gray-900 dark:text-white truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                            {title}
+                        </h3>
+                        {tags && tags.length > 0 && (
+                            <div className="flex gap-1.5 overflow-hidden">
+                                {tags.slice(0, 2).map((t, idx) => (
+                                    <span
+                                        key={idx}
+                                        className="px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap border border-transparent dark:border-zinc-700/50"
+                                        style={{
+                                            backgroundColor: t.tag.color ? `${t.tag.color}20` : '#8B5CF620',
+                                            color: t.tag.color || '#8B5CF6'
+                                        }}
+                                    >
+                                        {t.tag.name}
+                                    </span>
+                                ))}
+                                {tags.length > 2 && (
+                                    <span className="text-[10px] text-gray-400 dark:text-zinc-500">+{tags.length - 2}</span>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
-            <div className="hidden sm:block text-sm text-gray-500 dark:text-zinc-400 truncate">
-                {owner}
+            <div className="hidden sm:flex items-center gap-2 px-4 border-l border-gray-100 dark:border-zinc-800/50">
+                <div className="w-6 h-6 rounded-full bg-gray-100 dark:bg-zinc-800 flex items-center justify-center overflow-hidden shrink-0">
+                    {owner?.avatar ? (
+                        <img src={owner.avatar} alt={owner.username} className="w-full h-full object-cover" />
+                    ) : (
+                        <User className="w-3.5 h-3.5 text-gray-400" />
+                    )}
+                </div>
+                <span className="text-xs text-gray-600 dark:text-zinc-400 truncate">
+                    {owner?.username || "Me"}
+                </span>
             </div>
 
-            <div className="hidden sm:block text-sm text-gray-500 dark:text-zinc-400 text-right pr-8 truncate">
-                {date}
+            <div className="hidden sm:flex items-center justify-end pr-8 gap-1.5 text-xs text-gray-500 dark:text-zinc-500">
+                <Clock className="w-3.5 h-3.5" />
+                <span className="whitespace-nowrap">{lastEdited}</span>
             </div>
 
-            <div className="relative w-10 flex justify-end">
+            <div className="relative">
                 <button
                     onClick={handleMenuClick}
-                    className="p-2 text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-700/50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    className="p-1.5 text-gray-400 dark:text-zinc-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
                 >
                     <MoreHorizontal className="w-5 h-5" />
                 </button>
@@ -93,21 +129,29 @@ export function DocumentRow({ title, owner, date, onClick, onDelete, onRename }:
                         >
                             <div className="p-1">
                                 <button
-                                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                                    onClick={(e) => { e.stopPropagation(); onClick?.(); }}
                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg"
                                 >
                                     <ExternalLink className="w-4 h-4" />
                                     Open
                                 </button>
                                 <button
-                                    onClick={handleRename}
+                                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onRename?.(); }}
                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg"
                                 >
                                     <Pencil className="w-4 h-4" />
                                     Rename
                                 </button>
                                 <button
-                                    onClick={handleDelete}
+                                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onMove?.(); }}
+                                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 dark:text-zinc-300 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg"
+                                >
+                                    <FolderInput className="w-4 h-4" />
+                                    Move to folder
+                                </button>
+                                <div className="h-px bg-gray-100 dark:bg-zinc-800 my-1" />
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); setShowMenu(false); onDelete?.(); }}
                                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-lg"
                                 >
                                     <Trash className="w-4 h-4" />

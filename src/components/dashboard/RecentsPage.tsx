@@ -33,16 +33,17 @@ export default function RecentsPage() {
     };
 
     // Filter documents based on search query
-    const filteredDocuments = documents.filter(doc =>
+    const filteredDocuments = documents?.filter(doc =>
         doc.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const displayDocs = filteredDocuments.map(doc => ({
+    const displayDocs = filteredDocuments?.map(doc => ({
         id: doc.id,
         title: doc.title,
-        owner: doc.owner?.username || "Me",
+        owner: doc.owner,
         date: new Date(doc.updatedAt).toLocaleString(),
-        rawDate: new Date(doc.updatedAt) // for additional sorting if needed
+        rawDate: new Date(doc.updatedAt),
+        tags: doc.tags
     }));
 
     if (isLoading || isUserLoading) {
@@ -73,9 +74,9 @@ export default function RecentsPage() {
                 </div>
 
                 <div className="divide-y divide-gray-100 dark:divide-zinc-800/50">
-                    {displayDocs.length === 0 ? (
+                    {!displayDocs || displayDocs.length === 0 ? (
                         <div className="p-12 text-center text-gray-500 dark:text-zinc-500">
-                            {documents.length === 0 ? (
+                            {documents?.length === 0 ? (
                                 <div className="flex flex-col items-center">
                                     <Clock className="w-10 h-10 mb-4 text-gray-300 dark:text-zinc-600" />
                                     <p>No recent documents</p>
@@ -93,9 +94,11 @@ export default function RecentsPage() {
                                 transition={{ delay: index * 0.05 }}
                             >
                                 <DocumentRow
+                                    id={doc.id}
                                     title={doc.title}
                                     owner={doc.owner}
-                                    date={doc.date}
+                                    lastEdited={doc.date}
+                                    tags={doc.tags}
                                     onClick={() => navigate(`/doc/${doc.id}`)}
                                 />
                             </motion.div>

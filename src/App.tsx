@@ -4,10 +4,11 @@ import ForgotPasswordPage from './components/ForgotPasswordPage';
 import ResetPasswordPage from './components/ResetPasswordPage';
 import { ThemeProvider } from './components/ThemeProvider';
 import RecentsPage from './components/dashboard/RecentsPage';
-import SettingsPage from './components/dashboard/SettingsPage';
 import DashboardPage from './components/dashboard/DashboardPage';
 import SharedPage from './components/dashboard/SharedPage';
 import TrashPage from './components/dashboard/TrashPage';
+import SettingsPage from './components/dashboard/SettingsPage';
+import WorkspaceSettingsPage from './components/dashboard/WorkspaceSettingsPage';
 import DocumentWorkspacePage from './components/editor/DocumentWorkspace';
 import { useUserStore } from './store/useUserStore';
 import { useEffect } from 'react';
@@ -27,10 +28,13 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/folder/:folderId" element={<DashboardPage />} />
+            <Route path="/tag/:tagId" element={<DashboardPage />} />
             <Route path="/recents" element={<RecentsPage />} />
             <Route path="/shared" element={<SharedPage />} />
             <Route path="/trash" element={<TrashPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/workspace/:workspaceId/settings" element={<WorkspaceSettingsPage />} />
             <Route path="/doc/:id" element={<DocumentWorkspacePage />} />
             <Route path="/auth" element={<AuthPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
