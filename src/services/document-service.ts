@@ -15,6 +15,7 @@ export interface Document {
     };
     isPublic: boolean;
     publicRole?: 'VIEWER' | 'EDITOR' | null;
+    intent?: 'brainstorm' | 'decision' | 'document' | 'execute';
     content?: any;
     permissions?: {
         id: string;

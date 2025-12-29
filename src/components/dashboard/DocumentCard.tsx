@@ -1,6 +1,6 @@
-import { FileText, Clock, MoreHorizontal, ExternalLink, Pencil, Trash, FolderInput } from "lucide-react";
+import { FileText, Clock, MoreHorizontal, ExternalLink, Pencil, Trash, FolderInput, Brain, Scale, Rocket } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 
 interface DocumentCardProps {
     id: string;
@@ -12,11 +12,12 @@ interface DocumentCardProps {
     onDelete?: () => void;
     onRename?: () => void;
     onMove?: () => void;
+    intent?: string;
 }
 
 import { useDragStore } from "../../store/useDragStore";
 
-export function DocumentCard({ id, title, lastEdited, icon, tags, onClick, onDelete, onRename, onMove }: DocumentCardProps) {
+export const DocumentCard = memo(function DocumentCard({ id, title, lastEdited, icon, tags, onClick, onDelete, onRename, onMove, intent }: DocumentCardProps) {
     const { setDraggedItem, clearDraggedItem } = useDragStore();
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -57,8 +58,21 @@ export function DocumentCard({ id, title, lastEdited, icon, tags, onClick, onDel
         >
             <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3 overflow-hidden">
-                    <div className="p-2.5 bg-indigo-50 dark:bg-indigo-500/10 rounded-xl group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/20 transition-colors shrink-0">
-                        {icon || <FileText className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />}
+                    <div className={`p-2.5 rounded-xl transition-colors shrink-0 ${intent === 'brainstorming' ? 'bg-amber-50 dark:bg-amber-500/10 group-hover:bg-amber-100' :
+                        intent === 'decision' ? 'bg-emerald-50 dark:bg-emerald-500/10 group-hover:bg-emerald-100' :
+                            intent === 'documentation' ? 'bg-purple-50 dark:bg-purple-500/10 group-hover:bg-purple-100' :
+                                intent === 'execution' ? 'bg-blue-50 dark:bg-blue-500/10 group-hover:bg-blue-100' :
+                                    'bg-indigo-50 dark:bg-indigo-500/10 group-hover:bg-indigo-100'
+                        }`}>
+                        {icon ? icon : (
+                            <>
+                                {intent === 'brainstorming' && <Brain className="w-6 h-6 text-amber-600 dark:text-amber-400" />}
+                                {intent === 'decision' && <Scale className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />}
+                                {intent === 'documentation' && <FileText className="w-6 h-6 text-purple-600 dark:text-purple-400" />}
+                                {intent === 'execution' && <Rocket className="w-6 h-6 text-blue-600 dark:text-blue-400" />}
+                                {!intent && <FileText className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />}
+                            </>
+                        )}
                     </div>
                     {tags && tags.length > 0 && (
                         <div className="flex flex-wrap gap-1 overflow-hidden">
@@ -152,4 +166,4 @@ export function DocumentCard({ id, title, lastEdited, icon, tags, onClick, onDel
             </div>
         </motion.div >
     );
-}
+});

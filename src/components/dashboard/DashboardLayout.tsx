@@ -1,11 +1,12 @@
 import { useUserStore } from "../../store/useUserStore";
 import { ThemeToggle } from "../ThemeToggle";
 import { Sidebar } from "./Sidebar";
-import { Search, X } from "lucide-react";
+import { Search, X, Menu } from "lucide-react";
 import { NotificationCenter } from "./NotificationCenter";
 
 import { ActivityFeed } from "./ActivityFeed";
 import { TagFilter } from "./TagFilter";
+import { IntentFilter } from "./IntentFilter";
 import { useState, useEffect } from "react";
 import { History } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -24,11 +25,14 @@ interface DashboardLayoutProps {
         color?: string;
     }[];
     onClearFilter?: (type: 'folder' | 'tag', id: string) => void;
+    activeIntent?: string | null;
+    onSelectIntent?: (intent: string | null) => void;
 }
 
-export function DashboardLayout({ children, searchQuery, onSearchChange, activeFilters, onClearFilter, activeTagId, onSelectTag }: DashboardLayoutProps) {
+export function DashboardLayout({ children, searchQuery, onSearchChange, activeFilters, onClearFilter, activeTagId, onSelectTag, activeIntent, onSelectIntent }: DashboardLayoutProps) {
     const { user, isLoading: isUserLoading, error } = useUserStore();
     const [isActivityFeedOpen, setIsActivityFeedOpen] = useState(false);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const navigator = useNavigate();
 
     useEffect(() => {
@@ -75,12 +79,18 @@ export function DashboardLayout({ children, searchQuery, onSearchChange, activeF
 
     return (
         <div className="flex h-screen bg-gray-50 dark:bg-[#121212] transition-colors duration-300">
-            <Sidebar />
+            <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
             <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Top Header */}
-                <header className="h-16 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between px-8 transition-colors duration-300 relative z-30">
-                    <div className="flex-1 max-w-xl">
+                <header className="h-16 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-200 dark:border-zinc-800 flex items-center justify-between px-4 md:px-8 transition-colors duration-300 relative z-30">
+                    <div className="flex items-center gap-4 flex-1 max-w-xl">
+                        <button
+                            onClick={() => setIsSidebarOpen(true)}
+                            className="p-2 -ml-2 text-gray-500 hover:bg-gray-100 dark:text-zinc-400 dark:hover:bg-zinc-800 rounded-lg md:hidden"
+                        >
+                            <Menu className="w-6 h-6" />
+                        </button>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-zinc-500" />
                             <input
@@ -125,6 +135,7 @@ export function DashboardLayout({ children, searchQuery, onSearchChange, activeF
                     </div>
 
                     <div className="flex items-center gap-4 ml-4">
+                        <IntentFilter activeIntent={activeIntent || null} onSelectIntent={onSelectIntent || (() => { })} />
                         <TagFilter activeTagId={activeTagId} onSelectTag={onSelectTag || (() => { })} />
 
                         <NotificationCenter />

@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
@@ -5,7 +6,6 @@ import {
     Brain, Scale, FileText, Rocket, Target
 } from "lucide-react";
 
-import { AnimatePresence } from "framer-motion";
 import { ThemeToggle } from "../ThemeToggle";
 import { TiptapEditor } from "./TiptapEditor";
 import { ErrorBoundary } from "../ErrorBoundary";
@@ -24,7 +24,9 @@ import { Layout } from "lucide-react";
 import { AISidebar } from "./AISidebar";
 import { AsyncDigest } from "./AsyncDigest";
 import { DocumentDashboard } from "./DocumentDashboard";
+import { OnboardingOverlay } from "../onboarding/OnboardingOverlay";
 import { notificationService } from "../../services/notification-service";
+import { AnimatePresence } from "framer-motion";
 
 
 
@@ -110,19 +112,24 @@ export default function DocumentWorkspace() {
         };
         init();
 
-        // Load intent
-        const savedIntent = localStorage.getItem(`collabdocs_intent_${id}`);
-        if (savedIntent) setIntent(savedIntent as any);
+        // Load intent from document metadata if available, otherwise fallback
+        if (document?.intent) setIntent(document.intent as any);
 
         // Track last visit
         return () => {
-            localStorage.setItem(`collabdocs_last_visit_${id}`, Date.now().toString());
+            localStorage.setItem(`collabdocs_last_visit_${id} `, Date.now().toString());
         };
     }, [id]);
 
-    const handleIntentChange = (newIntent: any) => {
+    const handleIntentChange = async (newIntent: any) => {
         setIntent(newIntent);
-        localStorage.setItem(`collabdocs_intent_${id}`, newIntent);
+        if (id && canEdit) {
+            try {
+                await documentService.update(id, { intent: newIntent });
+            } catch (error) {
+                console.error("Failed to update intent", error);
+            }
+        }
     };
 
     const canEdit = useMemo(() => {
@@ -134,6 +141,22 @@ export default function DocumentWorkspace() {
         );
         return userPermission?.role === 'EDITOR';
     }, [document, user]);
+
+    const handleTitleSave = useCallback(async () => {
+        if (!id || !canEdit || !title.trim()) return;
+        if (title === document.title) return; // No change
+
+        setSaveStatus("saving");
+        try {
+            await documentService.update(id, { title: title });
+            setSaveStatus("saved");
+            // Update local document reference to avoid re-triggering on next blur if unchanged
+            setDocument({ ...document, title });
+        } catch (error) {
+            console.error("Failed to save title", error);
+            setSaveStatus("error");
+        }
+    }, [id, canEdit, title, document]);
 
     const mentionableUsers = useMemo(() => {
         if (!canEdit || !document) return [];
@@ -171,25 +194,27 @@ export default function DocumentWorkspace() {
         }, 2000);
     }, [id, canEdit]);
 
-    const handleTagsChange = () => {
-        if (id) loadDocument(id);
-    };
+    const handleDownload = useCallback(async (format: string) => {
+        console.log(`Downloading as ${format}...`);
+        setShowDownloadMenu(false);
+    }, []);
 
-    const handlePremiumDownload = (format: string) => {
+    const handleTagsChange = useCallback(() => {
+        if (id) loadDocument(id);
+    }, [id, loadDocument]);
+
+    const handlePremiumDownload = useCallback((format: string) => {
         if (!isPremiumUser) {
             setShowPremiumModal(true);
             return;
         }
         handleDownload(format);
-    };
+    }, [isPremiumUser, handleDownload]);
 
-    const handleDownload = async (format: string) => {
-        console.log(`Downloading as ${format}...`);
-        setShowDownloadMenu(false);
-    };
 
-    const handleAddComment = () => setShowCommentInput(true);
-    const handleCommentSubmit = async (content: string) => {
+
+    const handleAddComment = useCallback(() => setShowCommentInput(true), []);
+    const handleCommentSubmit = useCallback(async (content: string) => {
         if (!id || !content.trim() || !editor) return;
 
         // Capture current selection for the API
@@ -208,13 +233,13 @@ export default function DocumentWorkspace() {
         } catch (error) {
             console.error("Failed to add comment", error);
         }
-    };
-    const handleCommentClick = (commentId: string) => {
+    }, [id, editor]);
+    const handleCommentClick = useCallback((commentId: string) => {
         setActiveCommentId(commentId);
         setShowComments(true);
-    };
+    }, []);
 
-    const handleJumpTo = (pos: number) => {
+    const handleJumpTo = useCallback((pos: number) => {
         if (!editor) return;
         editor.chain().focus(pos).run();
 
@@ -225,7 +250,7 @@ export default function DocumentWorkspace() {
         }
 
         setShowDashboard(false);
-    };
+    }, [editor]);
 
     const handleSendNudge = async (waitingUsers: any[]) => {
         if (!id || !title) return;
@@ -254,7 +279,7 @@ export default function DocumentWorkspace() {
     if (!document) return null;
 
     return (
-        <div className="flex flex-col h-screen bg-white dark:bg-[#121212]">
+        <div className="flex flex-col h-screen bg-white dark:bg-[#121212] py-1">
             <header className="h-16 border-b border-gray-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md flex items-center justify-between px-4 sticky top-0 z-40">
                 <div className="flex items-center gap-4">
                     <Link to="/" className="p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors">
@@ -262,15 +287,20 @@ export default function DocumentWorkspace() {
                     </Link>
 
                     <div className="flex flex-col">
-                        <input
-                            type="text"
+                        <input type="text"
                             value={title}
                             onChange={(e) => setTitle(e.target.value)}
+                            onBlur={handleTitleSave}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.currentTarget.blur();
+                                }
+                            }}
                             disabled={!canEdit}
                             className={`text-lg font-semibold bg-transparent border-none p-0 focus:ring-0 text-gray-900 dark:text-white placeholder-gray-400 ${!canEdit ? 'opacity-70 cursor-default' : ''}`}
                             placeholder="Untitled Document"
                         />
-                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-500">
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-zinc-500 pb-2">
                             {saveStatus === "saving" && <><Cloud className="w-3 h-3 animate-pulse" /><span>Saving...</span></>}
                             {saveStatus === "saved" && <><Check className="w-3 h-3" /><span>Saved to cloud</span></>}
                             {saveStatus === "error" && <span className="text-red-500">Error saving</span>}
@@ -317,7 +347,7 @@ export default function DocumentWorkspace() {
                                 key={idx}
                                 className="px-2 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap"
                                 style={{
-                                    backgroundColor: t.tag.color ? `${t.tag.color}20` : '#8B5CF620',
+                                    backgroundColor: t.tag.color ? `${t.tag.color} 20` : '#8B5CF620',
                                     color: t.tag.color || '#8B5CF6'
                                 }}
                             >
@@ -343,100 +373,104 @@ export default function DocumentWorkspace() {
                     </div>
 
                     <div className="h-6 w-px bg-gray-200 dark:bg-zinc-800" />
-                    <button
-                        onClick={() => setShowStats(!showStats)}
-                        className={`p-2 rounded-lg transition-all ${showStats
-                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 shadow-inner'
-                            : 'text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
-                            }`}
-                        title="Document Stats"
-                    >
-                        <BarChart3 className={`w-5 h-5 ${showStats ? 'animate-pulse' : ''}`} />
-                    </button>
-                    <div className="relative page-settings-container">
+                    <div className="flex items-center gap-2">
                         <button
-                            onClick={() => setShowPageSettings(!showPageSettings)}
-                            className={`p-2 rounded-lg transition-all ${showPageSettings
+                            onClick={() => setShowStats(!showStats)}
+                            className={`p-2 rounded-lg transition-all ${showStats
                                 ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 shadow-inner'
                                 : 'text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
                                 }`}
-                            title="Page Layout"
+                            title="Document Stats"
                         >
-                            <Layout className="w-5 h-5" />
+                            <BarChart3 className={`w-5 h-5 ${showStats ? 'animate-pulse' : ''}`} />
                         </button>
-                        {showPageSettings && (
-                            <div className="absolute right-0 mt-2 z-50">
-                                <PageSettings
-                                    settings={pageSettings}
-                                    onUpdate={setPageSettings}
-                                />
-                            </div>
-                        )}
-                    </div>
-                    <ThemeToggle />
 
-                    <div className="relative download-menu-container">
+                        <div className="relative page-settings-container">
+                            <button
+                                onClick={() => setShowPageSettings(!showPageSettings)}
+                                className={`p-2 rounded-lg transition-all ${showPageSettings
+                                    ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400 shadow-inner'
+                                    : 'text-gray-500 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800'
+                                    }`}
+                                title="Page Layout"
+                            >
+                                <Layout className="w-5 h-5" />
+                            </button>
+                            {showPageSettings && (
+                                <div className="absolute right-0 mt-2 z-50">
+                                    <PageSettings
+                                        settings={pageSettings}
+                                        onUpdate={setPageSettings}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        <ThemeToggle />
+
+                        <div className="relative download-menu-container">
+                            <button
+                                onClick={() => setShowDownloadMenu(!showDownloadMenu)}
+                                className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2"
+                            >
+                                <Download className="w-4 h-4" /> <span className="hidden lg:inline">Download</span> <ChevronDown className="w-3 h-3" />
+                            </button>
+                            {showDownloadMenu && (
+                                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg z-50">
+                                    <button onClick={() => handlePremiumDownload('docx')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 first:rounded-t-lg transition-colors flex items-center justify-between group">
+                                        <span>Download as DOCX</span>
+                                        {!isPremiumUser && <Lock className="w-3 h-3 text-amber-500" />}
+                                    </button>
+                                    <button onClick={() => handlePremiumDownload('pdf')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors flex items-center justify-between group">
+                                        <span>Download as PDF</span>
+                                        {!isPremiumUser && <Lock className="w-3 h-3 text-amber-500" />}
+                                    </button>
+                                    <div className="h-px bg-gray-200 dark:bg-zinc-700 my-1" />
+                                    <button onClick={() => handleDownload('html')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors">Download as HTML</button>
+                                    <button onClick={() => handleDownload('markdown')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors">Download as Markdown</button>
+                                    <button onClick={() => handleDownload('txt')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 last:rounded-b-lg transition-colors">Download as Text</button>
+                                </div>
+                            )}
+                        </div>
+
                         <button
-                            onClick={() => setShowDownloadMenu(!showDownloadMenu)}
-                            className="px-4 py-2 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200 text-sm font-medium rounded-lg hover:bg-gray-200 dark:hover:bg-zinc-700 transition-colors flex items-center gap-2"
+                            onClick={() => setShowShareDialog(true)}
+                            disabled={!canEdit}
+                            className={`px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
                         >
-                            <Download className="w-4 h-4" /> Download <ChevronDown className="w-3 h-3" />
+                            <Share2 className="w-4 h-4" /> <span className="hidden lg:inline">Share</span>
                         </button>
-                        {showDownloadMenu && (
-                            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-zinc-800 border border-gray-200 dark:border-zinc-700 rounded-lg shadow-lg z-50">
-                                <button onClick={() => handlePremiumDownload('docx')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 first:rounded-t-lg transition-colors flex items-center justify-between group">
-                                    <span>Download as DOCX</span>
-                                    {!isPremiumUser && <Lock className="w-3 h-3 text-amber-500" />}
-                                </button>
-                                <button onClick={() => handlePremiumDownload('pdf')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors flex items-center justify-between group">
-                                    <span>Download as PDF</span>
-                                    {!isPremiumUser && <Lock className="w-3 h-3 text-amber-500" />}
-                                </button>
-                                <div className="h-px bg-gray-200 dark:bg-zinc-700 my-1" />
-                                <button onClick={() => handleDownload('html')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors">Download as HTML</button>
-                                <button onClick={() => handleDownload('markdown')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 transition-colors">Download as Markdown</button>
-                                <button onClick={() => handleDownload('txt')} className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-700 last:rounded-b-lg transition-colors">Download as Text</button>
-                            </div>
-                        )}
+
+                        <button
+                            onClick={() => {
+                                setShowComments(!showComments);
+                                if (!showComments) setShowAISidebar(false);
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${showComments ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
+                            title="Comments"
+                        >
+                            <MessageSquare className="w-5 h-5" />
+                        </button>
+
+                        <button
+                            onClick={() => {
+                                setShowAISidebar(!showAISidebar);
+                                if (!showAISidebar) setShowComments(false);
+                            }}
+                            className={`p-2 rounded-lg transition-colors ${showAISidebar ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
+                            title="AI Assistant"
+                        >
+                            <Sparkles className={`w-5 h-5 ${showAISidebar ? 'animate-pulse' : ''}`} />
+                        </button>
+
+                        <button
+                            onClick={() => setShowDashboard(!showDashboard)}
+                            className={`p-2 rounded-lg transition-all ${showDashboard ? 'bg-indigo-600 text-white shadow-lg scale-110' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
+                            title="Priority Board"
+                        >
+                            <Target className="w-5 h-5 font-bold" />
+                        </button>
                     </div>
-
-                    <button
-                        onClick={() => setShowShareDialog(true)}
-                        disabled={!canEdit}
-                        className={`px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 ${!canEdit ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    >
-                        <Share2 className="w-4 h-4" /> Share
-                    </button>
-
-                    <button
-                        onClick={() => {
-                            setShowComments(!showComments);
-                            if (!showComments) setShowAISidebar(false);
-                        }}
-                        className={`p-2 rounded-lg transition-colors ${showComments ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
-                        title="Comments"
-                    >
-                        <MessageSquare className="w-5 h-5" />
-                    </button>
-
-                    <button
-                        onClick={() => {
-                            setShowAISidebar(!showAISidebar);
-                            if (!showAISidebar) setShowComments(false);
-                        }}
-                        className={`p-2 rounded-lg transition-colors ${showAISidebar ? 'bg-purple-100 text-purple-600 dark:bg-purple-500/20 dark:text-purple-400' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
-                        title="AI Assistant"
-                    >
-                        <Sparkles className={`w-5 h-5 ${showAISidebar ? 'animate-pulse' : ''}`} />
-                    </button>
-
-                    <button
-                        onClick={() => setShowDashboard(!showDashboard)}
-                        className={`p-2 rounded-lg transition-all ${showDashboard ? 'bg-indigo-600 text-white shadow-lg scale-110' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-zinc-800'}`}
-                        title="Priority Board"
-                    >
-                        <Target className="w-5 h-5 font-bold" />
-                    </button>
                 </div>
             </header>
 
@@ -534,6 +568,8 @@ export default function DocumentWorkspace() {
                     mentionableUsers={mentionableUsers}
                 />
             )}
+
+            <OnboardingOverlay />
         </div>
     );
 }

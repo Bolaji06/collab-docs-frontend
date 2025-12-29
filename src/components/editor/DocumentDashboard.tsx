@@ -169,6 +169,7 @@ export const DocumentDashboard: React.FC<DocumentDashboardProps> = ({ editor, on
                 </p>
                 {stats.pendingAcks > 0 && (
                     <button
+                        data-testid="nudge-button"
                         onClick={() => onSendNudge(stats.waitingUsers)}
                         className="mt-4 w-full bg-white text-indigo-600 py-2 rounded-xl text-xs font-black uppercase tracking-widest shadow-lg shadow-indigo-900/20 active:scale-95 transition-transform"
                     >

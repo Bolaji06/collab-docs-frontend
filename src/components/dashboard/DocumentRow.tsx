@@ -1,6 +1,6 @@
-import { FileText, Clock, MoreHorizontal, ExternalLink, Pencil, Trash, FolderInput, User } from "lucide-react";
+import { FileText, Clock, MoreHorizontal, ExternalLink, Pencil, Trash, FolderInput, User, Brain, Scale, Rocket } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 
 interface DocumentRowProps {
     id: string;
@@ -16,11 +16,12 @@ interface DocumentRowProps {
     onDelete?: () => void;
     onRename?: () => void;
     onMove?: () => void;
+    intent?: string;
 }
 
 import { useDragStore } from "../../store/useDragStore";
 
-export function DocumentRow({ id, title, lastEdited, owner, tags, onClick, onDelete, onRename, onMove }: DocumentRowProps) {
+export const DocumentRow = memo(function DocumentRow({ id, title, lastEdited, owner, tags, onClick, onDelete, onRename, onMove, intent }: DocumentRowProps) {
     const { setDraggedItem, clearDraggedItem } = useDragStore();
     const [showMenu, setShowMenu] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -56,11 +57,20 @@ export function DocumentRow({ id, title, lastEdited, owner, tags, onClick, onDel
             onDragStart={() => setDraggedItem(id, title)}
             onDragEnd={() => setTimeout(clearDraggedItem, 100)}
             onClick={onClick}
-            className="group grid grid-cols-[2fr_1fr_1fr_auto] gap-4 p-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl hover:border-indigo-500/30 dark:hover:border-indigo-500/30 hover:shadow-md transition-all duration-200 cursor-pointer items-center touch-none"
+            className="group grid grid-cols-[1fr_auto] sm:grid-cols-[2fr_1fr_1fr_auto] gap-4 p-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl hover:border-indigo-500/30 dark:hover:border-indigo-500/30 hover:shadow-md transition-all duration-200 cursor-pointer items-center touch-none"
         >
             <div className="flex items-center gap-4 min-w-0">
-                <div className="p-2 bg-indigo-50 dark:bg-indigo-500/10 rounded-lg group-hover:bg-indigo-100 dark:group-hover:bg-indigo-500/20 transition-colors shrink-0">
-                    <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+                <div className={`p-2 rounded-lg transition-colors shrink-0 ${intent === 'brainstorming' ? 'bg-amber-50 dark:bg-amber-500/10 group-hover:bg-amber-100' :
+                    intent === 'decision' ? 'bg-emerald-50 dark:bg-emerald-500/10 group-hover:bg-emerald-100' :
+                        intent === 'documentation' ? 'bg-purple-50 dark:bg-purple-500/10 group-hover:bg-purple-100' :
+                            intent === 'execution' ? 'bg-blue-50 dark:bg-blue-500/10 group-hover:bg-blue-100' :
+                                'bg-indigo-50 dark:bg-indigo-500/10 group-hover:bg-indigo-100'
+                    }`}>
+                    {intent === 'brainstorming' && <Brain className="w-5 h-5 text-amber-600 dark:text-amber-400" />}
+                    {intent === 'decision' && <Scale className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />}
+                    {intent === 'documentation' && <FileText className="w-5 h-5 text-purple-600 dark:text-purple-400" />}
+                    {intent === 'execution' && <Rocket className="w-5 h-5 text-blue-600 dark:text-blue-400" />}
+                    {!intent && <FileText className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />}
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -164,4 +174,4 @@ export function DocumentRow({ id, title, lastEdited, owner, tags, onClick, onDel
             </div>
         </motion.div>
     );
-}
+});

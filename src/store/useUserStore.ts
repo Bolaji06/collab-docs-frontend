@@ -7,7 +7,7 @@ interface User {
     email: string;
     avatar?: string;
     isPremium: boolean;
-    // Add other user fields as needed
+    onboardingCompleted: boolean;
 }
 
 interface UserState {
@@ -16,6 +16,7 @@ interface UserState {
     error: string | null;
     fetchUser: () => Promise<void>;
     setUser: (user: User | null) => void;
+    completeOnboarding: () => Promise<void>;
     logout: () => void;
 }
 
@@ -39,6 +40,16 @@ export const useUserStore = create<UserState>((set) => ({
         }
     },
     setUser: (user) => set({ user }),
+    completeOnboarding: async () => {
+        try {
+            const response = await apiClient.post<{ success: boolean; data: User }>('/auth/onboarding/complete', {});
+            if (response.success && response.data) {
+                set({ user: response.data });
+            }
+        } catch (error) {
+            console.error("Failed to complete onboarding", error);
+        }
+    },
     logout: () => {
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');

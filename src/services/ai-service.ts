@@ -21,6 +21,9 @@ export const aiService = {
     suggestTags: (text: string) =>
         apiClient.post<AITagResponse>('/ai/suggest-tags', { text }),
 
+    analyzeAlignment: (text: string, intent: string) =>
+        apiClient.post<AIResponse>('/ai/analyze-alignment', { text, intent }),
+
     generateActivityDigest: (activity: string, intent?: string) =>
         apiClient.post<AIResponse>('/ai/summarize', {
             text: `Summarize this recent activity for a returning user: ${activity}. The current document mode is ${intent || 'documentation'}. Prioritize items that match this mode.`

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Bot, User, Loader2, X, Sparkles } from "lucide-react";
+import { Send, Bot, User, Loader2, X, Sparkles, FileText, ClipboardCheck, Download } from "lucide-react";
 import { aiService } from "../../services/ai-service";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from 'react-markdown';
@@ -24,7 +24,7 @@ export function AISidebar({ documentId, documentContent, editor, intent, onClose
     ]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'chat' | 'insights'>('chat');
+    const [activeTab, setActiveTab] = useState<'chat' | 'insights' | 'synthesis'>('chat');
     const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -72,6 +72,12 @@ export function AISidebar({ documentId, documentContent, editor, intent, onClose
                     >
                         <Sparkles className="w-3.5 h-3.5" /> Insights
                     </button>
+                    <button
+                        onClick={() => setActiveTab('synthesis')}
+                        className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'synthesis' ? 'bg-white dark:bg-zinc-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-gray-500'}`}
+                    >
+                        <FileText className="w-3.5 h-3.5" /> Synthesis
+                    </button>
                 </div>
                 <button onClick={onClose} className="p-1 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-md transition-colors text-gray-500">
                     <X className="w-5 h-5" />
@@ -85,6 +91,61 @@ export function AISidebar({ documentId, documentContent, editor, intent, onClose
                     editor={editor}
                     intent={intent}
                 />
+            ) : activeTab === 'synthesis' ? (
+                <div className="flex-1 overflow-y-auto p-6 space-y-8 scrollbar-hide">
+                    <section>
+                        <div className="flex items-center gap-2 mb-4">
+                            <ClipboardCheck className="w-5 h-5 text-emerald-500" />
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">Alignment Report</h3>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400 mb-6 leading-relaxed">
+                            Generate a condensed executive summary of all decisions, tasks, and alignment status in this document.
+                        </p>
+                        <button
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-emerald-500/20 transition-all active:scale-95"
+                            onClick={() => {
+                                // Simple logic to generate and download a report
+                                const blocks = editor.getJSON().content.filter((n: any) => n.type === 'collaborationBlock');
+                                let report = `# Alignment Report: ${intent.toUpperCase()}\n\n`;
+                                report += `## Executive Summary\nGenerated on ${new Date().toLocaleDateString()}\n\n`;
+
+                                blocks.forEach((b: any) => {
+                                    const { type, status, acknowledgments = [] } = b.attrs;
+                                    const text = b.content?.[0]?.text || '[No content]';
+                                    report += `### [${type.toUpperCase()}] ${status.toUpperCase()}\n`;
+                                    report += `> ${text}\n\n`;
+                                    report += `**Acknowledgments:** ${acknowledgments.length} users\n\n---\n\n`;
+                                });
+
+                                const blob = new Blob([report], { type: 'text/markdown' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `Alignment-Report-${new Date().toISOString().split('T')[0]}.md`;
+                                a.click();
+                            }}
+                        >
+                            <Download className="w-4 h-4" />
+                            Export report (.md)
+                        </button>
+                    </section>
+
+                    <section className="pt-6 border-t border-gray-100 dark:border-zinc-800">
+                        <div className="flex items-center gap-2 mb-4">
+                            <Bot className="w-5 h-5 text-indigo-500" />
+                            <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-wider">AI Synthesis</h3>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4 leading-relaxed">
+                            Need a cross-document perspective?
+                        </p>
+                        <div className="p-4 bg-gray-50 dark:bg-zinc-800/50 rounded-xl border border-gray-100 dark:border-zinc-800">
+                            <h4 className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-2">Pro Tip</h4>
+                            <p className="text-[11px] text-gray-600 dark:text-zinc-400 italic">
+                                "Ask me to summarize the unresolved conflicts in this document or to list all tasks assigned to you."
+                            </p>
+                        </div>
+                    </section>
+                </div>
             ) : (
                 <>
                     <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">

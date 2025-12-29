@@ -4,14 +4,18 @@ import { DocumentCard } from "./DocumentCard";
 import { DocumentRow } from "./DocumentRow";
 import { Plus, Loader, Upload, LayoutGrid, List } from "lucide-react";
 import { motion } from "framer-motion";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { documentService, type Document } from "../../services/document-service";
-import { useNavigate, useParams,  } from "react-router-dom";
+import { useNavigate, useParams, } from "react-router-dom";
 import { folderService } from "../../services/folder-service";
 import { tagService } from "../../services/tag-service";
 import { RenameModal } from "./RenameModal";
 import { DeleteConfirmationModal } from "./DeleteConfirmationModal";
 import { MoveToFolderModal } from "./MoveToFolderModal";
+import { WorkspaceIntelligence } from "./WorkspaceIntelligence";
+import { WorkspaceAnalytics } from "./WorkspaceAnalytics";
+import { TemplateGalleryModal } from "./TemplateGalleryModal";
+import { type DocumentTemplate } from "../../services/template-service";
 import { useUserStore } from "../../store/useUserStore";
 import * as mammoth from "mammoth";
 import * as pdfjsLib from "pdfjs-dist";
@@ -51,6 +55,8 @@ export default function DashboardPage() {
     });
     const [activeFilterDetails, setActiveFilterDetails] = useState<{ type: 'folder' | 'tag', id: string, name: string, color?: string | null }[]>([]);
     const [secondaryTagId, setSecondaryTagId] = useState<string | null>(null);
+    const [activeIntent, setActiveIntent] = useState<string | null>(null);
+    const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const navigate = useNavigate();
 
@@ -184,7 +190,7 @@ export default function DashboardPage() {
         fetchFilterDetails();
     }, [folderId, tagId, secondaryTagId]);
 
-    const handleClearFilter = (type: 'folder' | 'tag', id: string) => {
+    const handleClearFilter = useCallback((type: 'folder' | 'tag', id: string) => {
         if (type === 'folder') {
             navigate('/');
         } else {
@@ -194,32 +200,43 @@ export default function DashboardPage() {
                 setSecondaryTagId(null);
             }
         }
-    };
+    }, [navigate, tagId]);
 
-    const handleCreateDocument = async () => {
+    const handleCreateDocument = useCallback(async (template?: DocumentTemplate) => {
         try {
-            const newDoc = await documentService.create("Untitled Document", folderId, currentWorkspaceId);
+            const title = template ? template.name : "Untitled Document";
+            const newDoc = await documentService.create(title, folderId, currentWorkspaceId);
+
+            if (template) {
+                await documentService.update(newDoc.id, {
+                    content: template.content,
+                    intent: template.intent
+                });
+            }
+
             navigate(`/doc/${newDoc.id}`);
         } catch (error) {
             console.error("Failed to create document:", error);
+        } finally {
+            setIsTemplateModalOpen(false);
         }
-    };
+    }, [folderId, currentWorkspaceId, navigate]);
 
-    const handleDeleteClick = (id: string, title: string, e: React.MouseEvent) => {
+    const handleDeleteClick = useCallback((id: string, title: string, e: React.MouseEvent) => {
         e.stopPropagation();
         setDeleteModal({ isOpen: true, docId: id, title: title });
-    };
+    }, []);
 
-    const handleRenameClick = (docId: string, title: string, e: React.MouseEvent) => {
+    const handleRenameClick = useCallback((docId: string, title: string, e: React.MouseEvent) => {
         e.stopPropagation();
         setRenameModal({ isOpen: true, docId, title });
-    };
+    }, []);
 
-    const handleMoveClick = (docId: string, title: string, currentFolderId?: string | null) => {
+    const handleMoveClick = useCallback((docId: string, title: string, currentFolderId?: string | null) => {
         setMoveModal({ isOpen: true, docId, title, folderId: currentFolderId });
-    };
+    }, []);
 
-    const confirmMove = async (folderId: string | null) => {
+    const confirmMove = useCallback(async (folderId: string | null) => {
         if (!moveModal.docId) return;
         try {
             await documentService.update(moveModal.docId, { folderId });
@@ -227,30 +244,30 @@ export default function DashboardPage() {
         } catch (error) {
             console.error("Failed to move document", error);
         }
-    };
+    }, [moveModal.docId]);
 
-    const confirmDelete = async () => {
+    const confirmDelete = useCallback(async () => {
         if (!deleteModal.docId) return;
 
         setIsDeleting(true);
         try {
             await documentService.delete(deleteModal.docId);
-            setDocuments(documents.filter(doc => doc.id !== deleteModal.docId));
+            setDocuments(prev => prev.filter(doc => doc.id !== deleteModal.docId));
             setDeleteModal({ isOpen: false, docId: null, title: "" });
         } catch (error) {
             console.error("Failed to delete document:", error);
         } finally {
             setIsDeleting(false);
         }
-    };
+    }, [deleteModal.docId]);
 
-    const confirmRename = async (newTitle: string) => {
+    const confirmRename = useCallback(async (newTitle: string) => {
         if (!renameModal.docId) return;
 
         setIsRenaming(true);
         try {
             await documentService.update(renameModal.docId, { title: newTitle });
-            setDocuments(documents.map(doc =>
+            setDocuments(prev => prev.map(doc =>
                 doc.id === renameModal.docId ? { ...doc, title: newTitle } : doc
             ));
             setRenameModal({ isOpen: false, docId: null, title: "" });
@@ -259,12 +276,14 @@ export default function DashboardPage() {
         } finally {
             setIsRenaming(false);
         }
-    };
+    }, [renameModal.docId]);
 
-    // Filter documents based on search query
-    const filteredDocuments = documents?.filter(doc =>
-        doc.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    // Filter documents based on search query and intent
+    const filteredDocuments = documents?.filter(doc => {
+        const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesIntent = activeIntent ? doc.intent === activeIntent : true;
+        return matchesSearch && matchesIntent;
+    });
 
     // Documents to display
     const quickAccessDocs = filteredDocuments?.slice(0, 4);
@@ -293,6 +312,8 @@ export default function DashboardPage() {
                     setSecondaryTagId(id);
                 }
             }}
+            activeIntent={activeIntent}
+            onSelectIntent={setActiveIntent}
         >
             <input
                 type="file"
@@ -303,7 +324,7 @@ export default function DashboardPage() {
             />
             {/* Header Section */}
             <div className="flex flex-col gap-1">
-                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 via-indigo-800 to-gray-900 dark:from-white dark:via-indigo-200 dark:to-white animate-gradient-x">
+                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-linear-to-r from-gray-900 via-indigo-800 to-gray-900 dark:from-white dark:via-indigo-200 dark:to-white animate-gradient-x">
                     Welcome back, {user?.username}
                 </h1>
                 <p className="text-gray-500 dark:text-zinc-400">
@@ -325,7 +346,7 @@ export default function DashboardPage() {
                     </p>
                     <div className="flex gap-4">
                         <motion.button
-                            onClick={handleCreateDocument}
+                            onClick={() => setIsTemplateModalOpen(true)}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                             className="px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 shadow-lg shadow-indigo-500/20"
@@ -344,6 +365,8 @@ export default function DashboardPage() {
                 </div>
             ) : (
                 <>
+                    <WorkspaceAnalytics workspaceId={currentWorkspaceId || ""} />
+                    <WorkspaceIntelligence documents={documents} />
                     {/* Quick Access Grid */}
                     <section className="my-8">
                         <h2 className="text-sm font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wider mb-6">
@@ -371,6 +394,7 @@ export default function DashboardPage() {
                                             onDelete={() => handleDeleteClick(doc.id, doc.title, { stopPropagation: () => { } } as any)}
                                             onRename={() => handleRenameClick(doc.id, doc.title, { stopPropagation: () => { } } as any)}
                                             onMove={() => handleMoveClick(doc.id, doc.title, doc.folderId)}
+                                            intent={doc.intent}
                                         />
                                     </motion.div>
                                 ))
@@ -418,7 +442,7 @@ export default function DashboardPage() {
 
                         {viewMode === 'list' ? (
                             <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm">
-                                <div className="grid grid-cols-[2fr_1fr_1fr_auto] gap-4 p-4 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/50 text-xs font-semibold text-gray-500 dark:text-zinc-500 uppercase tracking-wider rounded-t-2xl">
+                                <div className="grid grid-cols-[1fr_auto] sm:grid-cols-[2fr_1fr_1fr_auto] gap-4 p-4 border-b border-gray-200 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-800/50 text-xs font-semibold text-gray-500 dark:text-zinc-500 uppercase tracking-wider rounded-t-2xl">
                                     <div className="pl-12">Document Name</div>
                                     <div className="hidden sm:block">Owner</div>
                                     <div className="hidden sm:block text-right pr-8">Date Modified</div>
@@ -448,6 +472,7 @@ export default function DashboardPage() {
                                                     onDelete={() => handleDeleteClick(doc.id, doc.title, { stopPropagation: () => { } } as any)}
                                                     onRename={() => handleRenameClick(doc.id, doc.title, { stopPropagation: () => { } } as any)}
                                                     onMove={() => handleMoveClick(doc.id, doc.title, doc.folderId)}
+                                                    intent={doc.intent}
                                                 />
                                             </motion.div>
                                         ))
@@ -477,6 +502,7 @@ export default function DashboardPage() {
                                                 onDelete={() => handleDeleteClick(doc.id, doc.title, { stopPropagation: () => { } } as any)}
                                                 onRename={() => handleRenameClick(doc.id, doc.title, { stopPropagation: () => { } } as any)}
                                                 onMove={() => handleMoveClick(doc.id, doc.title, doc.folderId)}
+                                                intent={doc.intent}
                                             />
                                         </motion.div>
                                     ))
@@ -513,10 +539,13 @@ export default function DashboardPage() {
                         </motion.button>
 
                         <motion.button
-                            onClick={handleCreateDocument}
+                            onClick={() => {
+                                console.log("CLICK: Opening Template Modal");
+                                setIsTemplateModalOpen(true);
+                            }}
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
-                            className="p-4 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-full shadow-lg shadow-indigo-500/30 text-white hover:shadow-indigo-500/50 transition-shadow cursor-pointer"
+                            className="p-4 bg-linear-to-br from-indigo-500 to-purple-600 rounded-full shadow-lg shadow-indigo-500/30 text-white hover:shadow-indigo-500/50 transition-shadow cursor-pointer"
                         >
                             <Plus className="w-6 h-6" />
                         </motion.button>
@@ -548,6 +577,12 @@ export default function DashboardPage() {
                 documentTitle={moveModal.title}
                 currentFolderId={moveModal.folderId}
                 onMove={confirmMove}
+            />
+
+            <TemplateGalleryModal
+                isOpen={isTemplateModalOpen}
+                onClose={() => setIsTemplateModalOpen(false)}
+                onSelect={handleCreateDocument}
             />
         </DashboardLayout >
     );

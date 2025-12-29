@@ -28,7 +28,7 @@ import { CollaboratorAvatars } from "./CollaboratorAvatars";
 import { VersionHistory } from "./VersionHistory";
 import { CommentMark } from "./extensions/CommentMark";
 import { Editor } from "@tiptap/react";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState, useRef, memo } from "react";
 import { MessageSquare, Bold, Italic, Strikethrough } from "lucide-react";
 import Mention from '@tiptap/extension-mention';
 import { ReactRenderer } from '@tiptap/react';
@@ -71,7 +71,7 @@ interface TiptapEditorProps {
 const COLORS = ['#958DF1', '#F98181', '#FBBC88', '#FAF594', '#70CFF8', '#94FADB', '#B9F18D'];
 
 // Inner component that assumes provider and ydoc are present if usage is collaborative
-function TiptapEditorContent({
+const TiptapEditorContent = memo(function TiptapEditorContent({
     content,
     onChange,
     editable,
@@ -83,8 +83,10 @@ function TiptapEditorContent({
     ydoc,
     provider,
     mentionableUsers = [],
-    pageSettings = { width: 'standard', background: 'white', fontSize: 'base' }
-}: TiptapEditorProps & { ydoc: Y.Doc | null, provider: SocketIOProvider | null }) {
+    pageSettings = { width: 'standard', background: 'white', fontSize: 'base' },
+    isSynced = false,
+    connectionStatus = 'connected'
+}: TiptapEditorProps & { ydoc: Y.Doc | null, provider: SocketIOProvider | null, isSynced?: boolean, connectionStatus?: 'connecting' | 'connected' | 'disconnected' }) {
 
     const editor = useEditor({
         extensions: [
@@ -576,15 +578,24 @@ function TiptapEditorContent({
     const isHydrated = useRef(false);
 
     useEffect(() => {
-        if (editor && content && editor.getHTML() !== content) {
-            // Hydrate from content prop if editor is empty.
-            // This is crucial for imported documents where DB has content but Yjs doc is initially empty.
-            if (editor.isEmpty && content !== "" && !isHydrated.current) {
-                editor.commands.setContent(content);
-                isHydrated.current = true;
-            }
+        // Only hydrate when provider is synced (or if we are not using a provider, but here we enforce one for docs)
+        // If !isSynced, we don't know if ydoc is truly empty or just waiting for data.
+        // EXCEPTION: If we are offline (disconnected), we should trust our local data/props and hydrate.
+        const isOffline = connectionStatus === 'disconnected';
+        if (!editor || !content || isHydrated.current || (documentId && !isSynced && !isOffline)) return;
+
+        // Hydrate from content prop if editor is empty AND ydoc is effectively empty.
+        // This is crucial for imported documents where DB has content but Yjs doc is initially fresh.
+        const isYdocEmpty = ydoc ? ydoc.getXmlFragment('default').length === 0 : true;
+
+        if (editor.isEmpty && isYdocEmpty && content !== "") {
+            editor.commands.setContent(content);
+            isHydrated.current = true;
+        } else if (!editor.isEmpty || !isYdocEmpty) {
+            // Document already has content, mark as hydrated to stay out of the way
+            isHydrated.current = true;
         }
-    }, [content, editor]);
+    }, [content, editor, ydoc, isSynced, documentId, connectionStatus]);
 
     useEffect(() => {
         if (editor && onEditorReady) {
@@ -643,6 +654,19 @@ function TiptapEditorContent({
                     }
                 />
             )}
+            {/* Offline/Status Indicator */}
+            <div className="absolute top-2 right-2 z-50 pointer-events-none flex flex-col items-end gap-1">
+                {connectionStatus === 'disconnected' && (
+                    <div className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 px-2 py-1 rounded text-xs font-medium border border-yellow-200 dark:border-yellow-800/50 shadow-sm">
+                        Offline • Changes saved locally
+                    </div>
+                )}
+                {connectionStatus === 'connecting' && (
+                    <div className="bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 px-2 py-1 rounded text-xs font-medium border border-blue-200 dark:border-blue-800/50 shadow-sm animate-pulse">
+                        Syncing...
+                    </div>
+                )}
+            </div>
             <div className="flex-1 overflow-auto bg-gray-50 dark:bg-[#121212] flex justify-center p-4 sm:p-8">
                 <style>{`
                     .collaboration-cursor__caret {
@@ -771,7 +795,7 @@ function TiptapEditorContent({
             )}
         </div>
     );
-}
+});
 
 // Wrapper component to handle Yjs initialization
 export function TiptapEditor(props: TiptapEditorProps) {
@@ -784,6 +808,59 @@ export function TiptapEditor(props: TiptapEditorProps) {
     const [provider, setProvider] = useState<SocketIOProvider | null>(null);
 
     const [error, setError] = useState<string | null>(null);
+
+    const [isSynced, setIsSynced] = useState(false);
+    const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+
+    useEffect(() => {
+        if (provider) {
+            setIsSynced(false);
+
+            const handleSynced = (state: boolean) => {
+                setIsSynced(state);
+            };
+
+            const handleStatus = ({ status }: { status: 'connecting' | 'connected' | 'disconnected' }) => {
+                setConnectionStatus(status);
+                if (status === 'connected') {
+                    setError(null);
+                }
+            };
+
+            // y-socket.io might expose 'synced' event with boolean or just trigger
+            provider.on('synced', handleSynced);
+            provider.on('status', handleStatus);
+
+            // Access underlying socket to handle connection events robustly
+            // This ensures we catch 'disconnected' state even if provider.on('status') lags or behaves differently
+            const socket = provider.socket;
+            if (socket) {
+                socket.on('connect', () => {
+                    setConnectionStatus('connected');
+                    setError(null);
+                });
+                socket.on('disconnect', () => {
+                    setConnectionStatus('disconnected');
+                });
+                socket.on('connect_error', (err: any) => {
+                    console.warn("Socket connection error:", err);
+                    setConnectionStatus('disconnected');
+                    // We don't set 'error' state here to avoid showing the fatal error screen
+                    // relying on offline mode instead.
+                });
+            }
+
+            return () => {
+                provider.off('synced', handleSynced);
+                provider.off('status', handleStatus);
+                if (socket) {
+                    socket.off('connect');
+                    socket.off('disconnect');
+                    socket.off('connect_error');
+                }
+            };
+        }
+    }, [provider]);
 
     useEffect(() => {
         if (!documentId || !ydoc) {
@@ -819,6 +896,7 @@ export function TiptapEditor(props: TiptapEditorProps) {
         } catch (err: any) {
             console.error("Failed to initialize SocketIOProvider:", err);
             setError(err.message || "Failed to connect");
+            setConnectionStatus('disconnected');
         }
     }, [documentId, ydoc]);
 
@@ -828,11 +906,20 @@ export function TiptapEditor(props: TiptapEditorProps) {
         }
     }, [ydoc]);
 
-    if (documentId && (!ydoc || !provider)) {
+    if (documentId && (!ydoc)) {
+        // If NO ydoc and NO provider, we can't do anything.
+        // But ydoc is created in useMemo, so it's only null if documentId is null (which is handled by outer check)
+        // or if we decide ydoc is null.
         if (error) {
             return (
                 <div className="flex flex-col h-full bg-white dark:bg-zinc-900 items-center justify-center">
-                    <p className="text-red-500">Connection Error: {error}</p>
+                    <p className="text-red-500 mb-2">Connection Error: {error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="text-indigo-600 hover:text-indigo-800 text-sm underline"
+                    >
+                        Reload to retry
+                    </button>
                 </div>
             );
         }
@@ -844,13 +931,20 @@ export function TiptapEditor(props: TiptapEditorProps) {
         );
     }
 
+    // If we have documentId and ydoc, but provider is null (e.g. error/init failed),
+    // we renders TiptapEditorContent. It handles nullable provider.
+    // connectionStatus should be 'disconnected' (set in catch block).
+
+
     return (
         <TiptapEditorContent
             {...props}
-            // We force a remount if the provider changes to purely clean state
-            key={provider?.socket.id || 'offline'}
+            // Use a stable key to prevent re-mounting and losing ref state (like isHydrated)
+            key={documentId || 'static'}
             ydoc={ydoc}
             provider={provider}
+            isSynced={isSynced}
+            connectionStatus={connectionStatus}
         />
     );
 }
