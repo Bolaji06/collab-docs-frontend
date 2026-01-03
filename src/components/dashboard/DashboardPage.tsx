@@ -24,6 +24,7 @@ import * as pdfjsLib from "pdfjs-dist";
 // Using URL-based import for Vite
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { useWorkspaceStore } from "../../store/useWorkspaceStore";
+import { parsePdfToHtml } from "../../utils/pdf-utils";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 export default function DashboardPage() {
@@ -73,17 +74,7 @@ export default function DashboardPage() {
             const title = file.name.replace(/\.[^/.]+$/, ""); // Remove extension
 
             if (file.type === 'application/pdf') {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                let fullText = '';
-
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    const pageText = textContent.items.map((item: any) => item.str).join(' ');
-                    fullText += `<p>${pageText}</p>`;
-                }
-                content = fullText;
+                content = await parsePdfToHtml(file);
             } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
                 const arrayBuffer = await file.arrayBuffer();
                 const result = await mammoth.convertToHtml({ arrayBuffer });

@@ -12,6 +12,11 @@ export const aiService = {
     summarizeText: (text: string) =>
         apiClient.post<AIResponse>('/ai/summarize', { text }),
 
+    generateText: (text: string) =>
+        apiClient.post<AIResponse>('/ai/summarize', {
+            text: `Continue writing this text. Maintain the style and tone. Context: ${text}`
+        }),
+
     improveWriting: (text: string) =>
         apiClient.post<AIResponse>('/ai/improve', { text }),
 

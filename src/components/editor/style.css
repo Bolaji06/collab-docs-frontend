@@ -5,12 +5,18 @@
   }
 
   /* Placeholder (at the top) */
-  p.is-editor-empty:first-child::before {
-    color: var(--gray-4);
+  /* Placeholder */
+  p.is-empty::before {
+    color: #adb5bd;
     content: attr(data-placeholder);
     float: left;
     height: 0;
     pointer-events: none;
+  }
+
+  .dark p.is-empty::before {
+    color: #52525b;
+    /* zinc-600 */
   }
 
   p {

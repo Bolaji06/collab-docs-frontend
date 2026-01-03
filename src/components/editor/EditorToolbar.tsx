@@ -22,7 +22,10 @@ import {
     Image as ImageIcon,
     Table as TableIcon,
     MessageSquare,
-    History as HistoryIcon
+    History as HistoryIcon,
+    FileText,
+    ScrollText,
+    Mic,
 } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -36,39 +39,63 @@ interface EditorToolbarProps {
     onAddComment?: () => void;
     onShowHistory?: () => void;
     rightContent?: React.ReactNode;
+    isPaged?: boolean;
+    onTogglePaged?: () => void;
+    onImageClick?: () => void;
+    isListening?: boolean;
+    isPaused?: boolean;
+    onVoiceStart?: () => void;
+    onVoicePause?: () => void;
+    onVoiceStop?: () => void;
+    hasSpeechSupport?: boolean;
 }
 
-export function EditorToolbar({ editor, onAddComment, onShowHistory, rightContent }: EditorToolbarProps) {
-    if (!editor) return null;
+export const ToolbarButton = ({
+    onClick,
+    isActive = false,
+    disabled = false,
+    children,
+    title,
+    className
+}: {
+    onClick: () => void;
+    isActive?: boolean;
+    disabled?: boolean;
+    children: React.ReactNode;
+    title?: string;
+    className?: string;
+}) => (
+    <button
+        onClick={onClick}
+        disabled={disabled}
+        title={title}
+        className={cn(
+            "p-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center justify-center min-w-[32px] h-8",
+            isActive
+                ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400"
+                : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-zinc-800 dark:hover:text-gray-200",
+            disabled && "opacity-50 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent",
+            className
+        )}
+    >
+        {children}
+    </button>
+);
 
-    const ToolbarButton = ({
-        onClick,
-        isActive = false,
-        disabled = false,
-        children,
-        title
-    }: {
-        onClick: () => void;
-        isActive?: boolean;
-        disabled?: boolean;
-        children: React.ReactNode;
-        title?: string;
-    }) => (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            title={title}
-            className={cn(
-                "p-2 rounded-lg text-sm font-medium transition-colors duration-200 flex items-center justify-center min-w-[32px] h-8",
-                isActive
-                    ? "bg-indigo-50 text-indigo-600 dark:bg-indigo-500/20 dark:text-indigo-400"
-                    : "text-gray-500 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-zinc-800 dark:hover:text-gray-200",
-                disabled && "opacity-50 cursor-not-allowed hover:bg-transparent dark:hover:bg-transparent"
-            )}
-        >
-            {children}
-        </button>
-    );
+export function EditorToolbar({
+    editor,
+    onAddComment,
+    onShowHistory,
+    rightContent,
+    isPaged,
+    onTogglePaged,
+    onImageClick,
+    isListening,
+    onVoiceStart,
+    onVoiceStop,
+    hasSpeechSupport
+}: EditorToolbarProps) {
+    if (!editor) return null;
 
     const setLink = () => {
         const previousUrl = editor.getAttributes('link').href
@@ -217,7 +244,7 @@ export function EditorToolbar({ editor, onAddComment, onShowHistory, rightConten
             <ToolbarButton onClick={setLink} isActive={editor.isActive("link")} title="Link">
                 <LinkIcon className="w-4 h-4" />
             </ToolbarButton>
-            <ToolbarButton onClick={addImage} title="Image">
+            <ToolbarButton onClick={onImageClick || addImage} title="Image">
                 <ImageIcon className="w-4 h-4" />
             </ToolbarButton>
             {onAddComment && (
@@ -235,6 +262,34 @@ export function EditorToolbar({ editor, onAddComment, onShowHistory, rightConten
             <ToolbarButton onClick={() => editor.chain().focus().toggleCode().run()} isActive={editor.isActive("code")} title="Code">
                 <Code className="w-4 h-4" />
             </ToolbarButton>
+
+            <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-2" />
+
+            {/* Voice */}
+            {hasSpeechSupport && (
+                <>
+                    <ToolbarButton
+                        onClick={isListening ? onVoiceStop! : onVoiceStart!} // Toggle logic for single button
+                        isActive={isListening}
+                        title={isListening ? "Recording... (Use bottom widget controls)" : "Start Recording"}
+                        className={isListening ? "text-red-600 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:bg-red-900/20" : ""}
+                    >
+                        <Mic className={cn("w-4 h-4", isListening && "animate-pulse")} />
+                    </ToolbarButton>
+                    <div className="w-px h-6 bg-gray-200 dark:bg-zinc-800 mx-2" />
+                </>
+            )}
+
+            {/* View Mode */}
+            {onTogglePaged && (
+                <ToolbarButton
+                    onClick={onTogglePaged}
+                    isActive={isPaged}
+                    title={isPaged ? "Switch to Continuous View" : "Switch to Paged View"}
+                >
+                    {isPaged ? <FileText className="w-4 h-4" /> : <ScrollText className="w-4 h-4" />}
+                </ToolbarButton>
+            )}
 
             {rightContent && (
                 <div className="ml-auto pl-4 border-l border-gray-200 dark:border-zinc-800 flex items-center">

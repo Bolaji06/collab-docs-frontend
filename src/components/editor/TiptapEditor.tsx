@@ -1,4 +1,5 @@
 import "./style.css";
+import Placeholder from '@tiptap/extension-placeholder';
 
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -24,12 +25,12 @@ import * as Y from "yjs";
 import { SocketIOProvider } from "y-socket.io";
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { EditorToolbar } from "./EditorToolbar";
+import { ImageInsertModal } from "./ImageInsertModal";
+import { DragHandle } from "./DragHandle";
 import { CollaboratorAvatars } from "./CollaboratorAvatars";
 import { VersionHistory } from "./VersionHistory";
-import { CommentMark } from "./extensions/CommentMark";
 import { Editor } from "@tiptap/react";
 import { useEffect, useMemo, useState, useRef, memo } from "react";
-import { MessageSquare, Bold, Italic, Strikethrough } from "lucide-react";
 import Mention from '@tiptap/extension-mention';
 import { ReactRenderer } from '@tiptap/react';
 import tippy from 'tippy.js';
@@ -42,10 +43,15 @@ import { CommandList } from "./CommandList";
 import {
     Heading1, Heading2, Heading3, List, ListOrdered, Quote, Code,
     Image as ImageIcon, CheckSquare, Table as TableIcon, Type,
-    Wand2, Calendar, Sparkles, CheckCircle2, ListTodo, HelpCircle, Lightbulb, AlertTriangle, Brain
+    Wand2, Sparkles, CheckCircle2, ListTodo, HelpCircle, Lightbulb, AlertTriangle, Brain, Mic
 } from "lucide-react";
 import { aiService } from "../../services/ai-service";
 import { CollaborationBlock } from "./extensions/CollaborationBlock";
+import { useSpeechRecognition } from "../../hooks/useSpeechRecognition";
+import { VoiceControlWidget } from "./VoiceControlWidget";
+import { AIStatus } from "./extensions/AIStatus";
+import BubbleMenu from "@tiptap/extension-bubble-menu";
+import { ImageMenu } from "./ImageMenu";
 
 interface TiptapEditorProps {
     content: string;
@@ -118,7 +124,7 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
             TaskItem.configure({
                 nested: true,
             }),
-            Highlight,
+            Highlight.configure({ multicolor: true }),
             TextStyle,
             Color,
             FontFamily,
@@ -146,9 +152,17 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                     },
                 }),
             ] : []),
-            CommentMark,
             CollaborationBlock.configure({
                 users: mentionableUsers
+            }),
+            AIStatus,
+            Placeholder.configure({
+                placeholder: "Type '/' for commands",
+                includeChildren: true,
+            }),
+            BubbleMenu.configure({
+                pluginKey: 'bubbleMenu',
+                shouldShow: null, // Let React component decide
             }),
             Commands.configure({
                 suggestion: {
@@ -288,11 +302,7 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                                 icon: <ImageIcon className="w-4 h-4" />,
                                 command: ({ editor, range }: any) => {
                                     editor.chain().focus().deleteRange(range).run()
-                                    // Normally trigger image upload here
-                                    const url = window.prompt('URL')
-                                    if (url) {
-                                        editor.chain().focus().setImage({ src: url }).run()
-                                    }
+                                    setIsImageModalOpen(true);
                                 },
                             },
                             {
@@ -328,16 +338,61 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                                 },
                             },
                             {
-                                title: 'Meeting Note-Taker',
-                                description: 'Generate structured notes from session',
-                                icon: <Calendar className="w-4 h-4 text-green-500" />,
+                                title: 'Meeting',
+                                description: 'Start voice recording',
+                                icon: <Mic className="w-4 h-4 text-red-500" />,
+                                command: ({ editor, range }: any) => {
+                                    editor.chain().focus().deleteRange(range).run()
+                                    window.dispatchEvent(new CustomEvent('start-voice-recording'));
+                                },
+                            },
+                            {
+                                title: 'AI: Continue Writing',
+                                description: 'Generate text based on context',
+                                icon: <Wand2 className="w-4 h-4 text-purple-500" />,
                                 command: async ({ editor, range }: any) => {
-                                    editor.chain().focus().deleteRange(range).insertContent('AI is generating meeting notes...').run();
+                                   // const { from, to } = editor.state.selection;
+                                    const context = editor.getText();
+
+                                    // Insert the atom node
+                                    editor.chain().focus().deleteRange(range).insertContent({ type: 'aiStatus' }).run();
+
                                     try {
-                                        const response = await aiService.extractMeetingNotes(editor.getText());
-                                        editor.chain().focus().extendMarkRange('paragraph').insertContent(response.result).run();
+                                        const response = await aiService.generateText(context);
+
+                                        // Replace the atom node with result.
+                                        // Since it's an atom, we can find it by type or assume it is at the cursor position (inserted).
+                                        // However, insertContent might leave cursor after it.
+
+                                        // Robust way: Find the node in the doc.
+                                        let pos = -1;
+                                        editor.state.doc.descendants((node: any, position: number) => {
+                                            if (node.type.name === 'aiStatus') {
+                                                pos = position;
+                                                return false; // stop iteration
+                                            }
+                                        });
+
+                                        if (pos > -1) {
+                                            editor.chain().focus().deleteRange({ from: pos, to: pos + 1 }).insertContent(response.result).run();
+                                        } else {
+                                            // Fallback
+                                            editor.chain().focus().insertContent(response.result).run();
+                                        }
+
                                     } catch (error) {
                                         console.error(error);
+                                        // Remove indicator on error
+                                        let pos = -1;
+                                        editor.state.doc.descendants((node: any, position: number) => {
+                                            if (node.type.name === 'aiStatus') {
+                                                pos = position;
+                                                return false;
+                                            }
+                                        });
+                                        if (pos > -1) {
+                                            editor.chain().focus().deleteRange({ from: pos, to: pos + 1 }).run();
+                                        }
                                     }
                                 },
                             },
@@ -499,72 +554,65 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
         }
     };
 
-    // Custom Bubble Menu State
-    const [showBubbleMenu, setShowBubbleMenu] = useState(false);
+   // const [showBubbleMenu, setShowBubbleMenu] = useState(false);
     const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
-    const [selectionRect, setSelectionRect] = useState<{ top: number; left: number } | null>(null);
+    const [isPaged, setIsPaged] = useState(true); // Default to paged view
+    const [isImageModalOpen, setIsImageModalOpen] = useState(false);
+    const [imageMenuPos, setImageMenuPos] = useState<{ top: number; left: number } | null>(null);
 
     useEffect(() => {
         if (!editor) return;
 
-        const updateBubbleMenu = () => {
-            const { selection } = editor.state;
-            if (selection.empty || editor.isActive('image')) {
-                setShowBubbleMenu(false);
+        const updateMenus = () => {
+            // Check for Image Selection
+            if (editor.isActive('image')) {
+                const domSelection = window.getSelection();
+                if (domSelection && domSelection.rangeCount > 0) {
+                    // When an image is selected in Tiptap, the selection is a NodeSelection.
+                    // The DOM selection might wrap the image or wrapper.
+                    // Let's rely on the editor view to match the node view element.
+                    // Actually, getting the node pos is better.
+                    const { from } = editor.state.selection;
+                    const node = editor.view.nodeDOM(from) as HTMLElement;
+
+                    if (node) {
+                        const rect = node.getBoundingClientRect();
+                        const editorContainer = editor.view.dom.closest('.overflow-y-auto');
+
+                        if (editorContainer) {
+                            const containerRect = editorContainer.getBoundingClientRect();
+                            // Position centered above the image
+                            setImageMenuPos({
+                                top: rect.top - containerRect.top + editorContainer.scrollTop - 50, // 50px above
+                                left: rect.left - containerRect.left + (rect.width / 2) - 80 // Centered (approx width 160)
+                            });
+                        }
+                    } else {
+                        // Fallback to DOM range if nodeDOM fails (sometimes handles text selection)
+                        const range = domSelection.getRangeAt(0);
+                        const rect = range.getBoundingClientRect();
+                        const editorContainer = editor.view.dom.closest('.overflow-y-auto');
+                        if (editorContainer) {
+                            const containerRect = editorContainer.getBoundingClientRect();
+                            setImageMenuPos({
+                                top: rect.top - containerRect.top + editorContainer.scrollTop - 40,
+                                left: rect.left - containerRect.left + (rect.width / 2) - 80
+                            });
+                        }
+                    }
+                }
                 return;
             }
 
-            // Calculate position
-            // We use the DOM selection to get coordinates relative to the viewport
-            // Then adjust for the scrolling container if needed, but 'fixed' or absolute relative to body is easier.
-            // Let's try relative to the editor container using Tiptap's view coords.
-
-            // Actually, we can just use the editor view's coordsAtPos
-            //const { from, to } = selection;
-            //const start = editor.view.coordsAtPos(from);
-            //const end = editor.view.coordsAtPos(to);
-
-            // Simple center calculation
-            // Note: This coordinate is viewport relative. 
-            // We need to convert it to match our rendered div's context if it's absolute.
-            // However, our div is inside a container that has `overflow-auto`.
-            // The easiest way is to use `fixed` position or calculate offsets.
-            // For now, let's try to get the container rect.
-
-            // Simplified: Just use window.getSelection() because Tiptap syncs it.
-            const domSelection = window.getSelection();
-            if (domSelection && domSelection.rangeCount > 0) {
-                const range = domSelection.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-
-                // We'll use fixed positioning for the menu to avoid container relative issues
-                // But wait, the menu is inside the scrollable container in my code.
-                // Let's make it fixed? Or handle offset.
-                // Let's update `selectionRect` to be relative to the viewport and use `fixed` in the render style?
-                // Actually my render code uses `absolute`. Let's assume the parent `relative` is the `main` or editor wrapper.
-                // The editor wrapper `.w-full.max-w-6xl` has `relative` (implicitly? no).
-                // Let's check line 193: `flex-1 relative` on main.
-                // The editor container line 230 has `overflow-y-auto`. `absolute` inside it will scroll with content.
-                // So we need coords relative to that container.
-
-                const editorContainer = editor.view.dom.closest('.overflow-y-auto');
-                if (editorContainer) {
-                    const containerRect = editorContainer.getBoundingClientRect();
-                    setSelectionRect({
-                        top: rect.top - containerRect.top + editorContainer.scrollTop,
-                        left: rect.left - containerRect.left + (rect.width / 2)
-                    });
-                    setShowBubbleMenu(true);
-                }
-            }
+            // Hide if not image
+            setImageMenuPos(null);
         };
 
-        editor.on('selectionUpdate', updateBubbleMenu);
-        editor.on('blur', () => setShowBubbleMenu(false));
-        // also update on scroll?
+        editor.on('selectionUpdate', updateMenus);
+        editor.on('blur', () => setImageMenuPos(null));
 
         return () => {
-            editor.off('selectionUpdate', updateBubbleMenu);
+            editor.off('selectionUpdate', updateMenus);
         };
     }, [editor]);
 
@@ -634,6 +682,26 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
         return null;
     }
 
+    const { isListening, isPaused, transcript, startListening, stopListening, pauseListening, resetTranscript, hasRecognitionSupport } = useSpeechRecognition();
+
+    useEffect(() => {
+        if (!editor || !transcript) return;
+
+        // Insert the transcript at current selection (with a space if needed)
+        // We only append processed chunks.
+        editor.chain().focus().insertContent(transcript + ' ').run();
+
+        // Consumed the transcript buffer
+        resetTranscript();
+    }, [editor, transcript, resetTranscript]);
+
+    // Command Event Listeners
+    useEffect(() => {
+        const handleStartVoice = () => startListening();
+        window.addEventListener('start-voice-recording', handleStartVoice);
+        return () => window.removeEventListener('start-voice-recording', handleStartVoice);
+    }, [startListening]);
+
     return (
         <div className={`flex flex-col h-full transition-colors duration-500 rounded-xl overflow-hidden ${pageSettings.background === 'sepia' ? 'bg-[#f4ecd8]' :
             pageSettings.background === 'zinc' ? 'bg-zinc-100' :
@@ -645,6 +713,15 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                     editor={editor}
                     onAddComment={onAddComment}
                     onShowHistory={() => setIsVersionHistoryOpen(true)}
+                    isPaged={isPaged}
+                    onTogglePaged={() => setIsPaged(!isPaged)}
+                    onImageClick={() => setIsImageModalOpen(true)}
+
+                    hasSpeechSupport={hasRecognitionSupport}
+                    isListening={isListening}
+                    onVoiceStart={startListening}
+                    onVoiceStop={stopListening}
+
                     rightContent={
                         <CollaboratorAvatars
                             provider={provider}
@@ -654,6 +731,30 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                     }
                 />
             )}
+            {imageMenuPos && (
+                <ImageMenu
+                    editor={editor}
+                    style={{
+                        top: imageMenuPos.top,
+                        left: imageMenuPos.left
+                    }}
+                />
+            )}
+            <VoiceControlWidget
+                isListening={isListening}
+                isPaused={isPaused}
+                onPause={pauseListening}
+                onResume={startListening} // Re-using start for resume if it handles logic, checking hook
+                onStop={stopListening}
+            />
+            <ImageInsertModal
+                isOpen={isImageModalOpen}
+                onClose={() => setIsImageModalOpen(false)}
+                onInsert={(url) => editor?.chain().focus().setImage({ src: url }).run()}
+            />
+
+            {editable && <DragHandle editor={editor} />}
+
             {/* Offline/Status Indicator */}
             <div className="absolute top-2 right-2 z-50 pointer-events-none flex flex-col items-end gap-1">
                 {connectionStatus === 'disconnected' && (
@@ -702,6 +803,48 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                         border-bottom: 2px solid #ca8a04; /* yellow-600 */
                         color: white;
                     }
+
+                    /* Paged View Styles */
+                    .editor-paged .ProseMirror {
+                        min-height: 1123px;
+                        padding: 4rem 3rem !important;
+                        background-image: repeating-linear-gradient(
+                            to bottom,
+                            var(--page-bg) 0px,
+                            var(--page-bg) 1080px,
+                            var(--gap-bg) 1080px,
+                            var(--gap-bg) 1120px
+                        );
+                        background-attachment: local; /* Scrolls with content */
+                        box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+                    }
+                    
+                    .editor-paged {
+                        --page-bg: #ffffff;
+                        --gap-bg: #f3f4f6;
+                    }
+                    .dark .editor-paged {
+                        --page-bg: #18181b; /* zinc-900 */
+                        --gap-bg: #09090b; /* zinc-950 or darker */
+                    }
+                    .bg-\[\#fefaf0\]\! .editor-paged {
+                        --page-bg: #fefaf0;
+                        --gap-bg: #eaddcf;
+                    }
+                    
+                    /* AI Generation Indicator */
+                    .ai-generating {
+                        color: #8b5cf6; /* violet-500 */
+                        font-style: italic;
+                        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+                    }
+                    .dark .ai-generating {
+                        color: #a78bfa; /* violet-400 */
+                    }
+                    @keyframes pulse {
+                        0%, 100% { opacity: 1; }
+                        50% { opacity: .5; }
+                    }
                 `}</style>
                 <div className={`w-full mx-auto bg-white dark:bg-zinc-900 min-h-[calc(100vh-12rem)] shadow-sm border border-gray-200 dark:border-zinc-800 rounded-xl overflow-y-auto cursor-text relative transition-all duration-300 ${pageSettings.width === 'standard' ? 'max-w-4xl' :
                     pageSettings.width === 'wide' ? 'max-w-6xl' :
@@ -714,72 +857,15 @@ const TiptapEditorContent = memo(function TiptapEditorContent({
                         pageSettings.background === 'zinc' ? 'dark:bg-zinc-800!' :
                             pageSettings.background === 'slate' ? 'dark:bg-slate-800!' :
                                 ''
-                    }`} onClick={(e) => {
+                    } ${isPaged ? 'editor-paged shadow-none border-none bg-transparent! dark:bg-transparent!' : ''}`} onClick={(e) => {
                         editor?.chain().focus().run();
                         handleEditorClick(e);
                     }}>
-                    {editor && (
-                        <div
-                            className="absolute z-50 transition-all duration-200 pointer-events-none"
-                            style={{
-                                top: selectionRect ? selectionRect.top - 50 : 0,
-                                left: selectionRect ? selectionRect.left : 0,
-                                opacity: showBubbleMenu ? 1 : 0,
-                                transform: `translate(-50%, ${showBubbleMenu ? '0' : '10px'})`,
-                            }}
-                        >
-                            <div
-                                className={`bg-white dark:bg-zinc-800 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 flex p-1 gap-1 pointer-events-auto ${showBubbleMenu ? '' : 'hidden'}`}
-                                onMouseDown={(e) => e.preventDefault()}
-                            >
-                                <div className="flex items-center gap-1 border-r border-gray-200 dark:border-zinc-700 pr-1 mr-1">
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            editor.chain().focus().toggleBold().run();
-                                        }}
-                                        className={`p-1.5 rounded transition-colors ${editor.isActive('bold') ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
-                                        title="Bold"
-                                    >
-                                        <Bold className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            editor.chain().focus().toggleItalic().run();
-                                        }}
-                                        className={`p-1.5 rounded transition-colors ${editor.isActive('italic') ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
-                                        title="Italic"
-                                    >
-                                        <Italic className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            editor.chain().focus().toggleStrike().run();
-                                        }}
-                                        className={`p-1.5 rounded transition-colors ${editor.isActive('strike') ? 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700'}`}
-                                        title="Strikethrough"
-                                    >
-                                        <Strikethrough className="w-4 h-4" />
-                                    </button>
-                                </div>
-                                {onAddComment && (
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onAddComment();
-                                        }}
-                                        className="p-2 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-zinc-700 rounded transition-colors flex items-center gap-2 text-xs font-medium"
-                                    >
-                                        <MessageSquare className="w-4 h-4" />
-                                        Comment
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+                    {editor && isPaged ? (
+                        <EditorContent editor={editor} className="h-full" />
+                    ) : (
+                        <EditorContent editor={editor} className="h-full min-h-[500px]" />
                     )}
-                    <EditorContent editor={editor} />
                 </div>
             </div>
 

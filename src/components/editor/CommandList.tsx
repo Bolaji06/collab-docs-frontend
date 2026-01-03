@@ -53,20 +53,20 @@ export const CommandList = forwardRef((props: any, ref) => {
     }))
 
     return (
-        <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 overflow-hidden min-w-[180px] p-1 scale-95 animate-in fade-in zoom-in duration-100">
+        <div className="bg-white dark:bg-zinc-800 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 overflow-y-auto max-h-[330px] min-w-[280px] p-1 scale-95 animate-in fade-in zoom-in duration-100">
             {props.items.length ? (
                 props.items.map((item: any, index: number) => (
                     <button
                         className={`w-full flex items-center gap-3 px-3 py-2 text-sm text-left rounded-md transition-colors ${index === selectedIndex
-                                ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
-                                : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700/50'
+                            ? 'bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'
+                            : 'text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-zinc-700/50'
                             }`}
                         key={index}
                         onClick={() => selectItem(index)}
                     >
                         <div className={`w-8 h-8 rounded border flex items-center justify-center ${index === selectedIndex
-                                ? 'bg-white dark:bg-zinc-800 border-indigo-200 dark:border-indigo-800 shadow-sm'
-                                : 'bg-gray-50 dark:bg-zinc-900 border-gray-100 dark:border-zinc-800'
+                            ? 'bg-white dark:bg-zinc-800 border-indigo-200 dark:border-indigo-800 shadow-sm'
+                            : 'bg-gray-50 dark:bg-zinc-900 border-gray-100 dark:border-zinc-800'
                             }`}>
                             {item.icon}
                         </div>
