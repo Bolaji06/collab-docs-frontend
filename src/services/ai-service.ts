@@ -47,4 +47,7 @@ export const aiService = {
         apiClient.post<AIResponse>('/ai/summarize', {
             text: `Analyze the impact of this decision: "${data.decision}" within the context of this document: ${data.docContext}. Document Mode: ${data.intent || 'documentation'}. What other areas are affected?`
         }),
+
+    editContent: (text: string, instruction: string) =>
+        apiClient.post<AIResponse>('/ai/edit', { text, instruction }),
 };

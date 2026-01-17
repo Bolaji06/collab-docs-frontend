@@ -27,6 +27,7 @@ import { DocumentDashboard } from "./DocumentDashboard";
 import { OnboardingOverlay } from "../onboarding/OnboardingOverlay";
 import { notificationService } from "../../services/notification-service";
 import { AnimatePresence } from "framer-motion";
+import { exportToHtml, exportToTxt, exportToMarkdown, exportToDocx, exportToPdf } from "../../utils/export-utils";
 
 
 
@@ -195,9 +196,31 @@ export default function DocumentWorkspace() {
     }, [id, canEdit]);
 
     const handleDownload = useCallback(async (format: string) => {
-        console.log(`Downloading as ${format}...`);
+        if (!editor || !document) return;
+
+        switch (format) {
+            case 'html':
+                exportToHtml(editor.getHTML(), title);
+                break;
+            case 'txt':
+                exportToTxt(editor, title);
+                break;
+            case 'markdown':
+                exportToMarkdown(editor, title);
+                break;
+            case 'docx':
+                await exportToDocx(editor.getHTML(), title);
+                break;
+            case 'pdf':
+                // For PDF, we need the editor DOM element
+                // We can find it via class or ref, editor.view.dom is the ProseMirror element
+                // But we might want the surrounding container for styles
+                const element = editor.view.dom as HTMLElement; // or document.querySelector('.ProseMirror')
+                await exportToPdf(element, title);
+                break;
+        }
         setShowDownloadMenu(false);
-    }, []);
+    }, [editor, title, document]);
 
     const handleTagsChange = useCallback(() => {
         if (id) loadDocument(id);

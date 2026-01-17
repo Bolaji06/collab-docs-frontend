@@ -1,10 +1,12 @@
 import { Editor } from '@tiptap/react';
 import {
     GripVertical, Trash2, Copy, Palette, ChevronRight,
-    Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Quote, Code, ArrowRightLeft
+    Type, Heading1, Heading2, Heading3, List, ListOrdered, CheckSquare, Quote, Code, ArrowRightLeft, Bold, Sparkles
 } from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { AIPromptModal } from './AIPromptModal';
+import { aiService } from '../../services/ai-service';
 
 interface DragHandleProps {
     editor: Editor;
@@ -28,6 +30,8 @@ export function DragHandle({ editor }: DragHandleProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const [submenuOpen, setSubmenuOpen] = useState<'color' | 'turnInto' | null>(null);
     const [currentBlockNode, setCurrentBlockNode] = useState<HTMLElement | null>(null);
+    const [aiModalOpen, setAiModalOpen] = useState(false);
+    const [aiLoading, setAiLoading] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -135,155 +139,206 @@ export function DragHandle({ editor }: DragHandleProps) {
             case 'taskList': editor.chain().toggleTaskList().run(); break;
             case 'blockquote': editor.chain().toggleBlockquote().run(); break;
             case 'codeBlock': editor.chain().toggleCodeBlock().run(); break;
+            case 'bold': editor.chain().toggleBold().run(); break;
         }
     });
 
-    if (!position) return null;
+    const handleAskAI = (instruction: string) => {
+        setAiLoading(true);
+        executeCommand(async () => {
+            try {
+                // Get content of the block
+                const { from, to } = editor.state.selection;
+                const text = editor.state.doc.textBetween(from, to, ' ');
 
-    return createPortal(
-        <div
-            ref={menuRef}
-            className="fixed z-50 transition-opacity duration-200"
-            style={{
-                top: position.top,
-                left: position.left,
-                opacity: 1,
-            }}
-        >
-            <div
-                className="flex items-center justify-center w-8 h-8 text-gray-400 rounded hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-zinc-800 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing"
-                draggable="true"
-                onDragStart={(e) => { e.preventDefault(); }}
-                onClick={() => {
-                    setMenuOpen(!menuOpen);
-                    setSubmenuOpen(null);
-                }}
-            >
-                <GripVertical className="w-5 h-5" />
-            </div>
+                const response = await aiService.editContent(text || editor.getText(), instruction);
 
-            {menuOpen && (
-                <div className="absolute top-8 left-0 mt-1 w-56 bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 overflow-visible flex flex-col z-10000 py-1">
+                if (response.result) {
+                    editor.chain().focus().insertContent(response.result).run();
+                }
+            } catch (error) {
+                console.error("AI Edit failed", error);
+            } finally {
+                setAiLoading(false);
+                setAiModalOpen(false);
+            }
+        });
+    };
 
-                    {/* Actions */}
-                    <button onClick={duplicateBlock} className="px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                        <Copy className="w-4 h-4" /> <span>Duplicate</span>
-                    </button>
+    const openAskAI = () => {
+        setMenuOpen(false);
+        setAiModalOpen(true);
+    };
 
-                    {/* Turn Into Submenu Trigger */}
-                    <div className="relative group">
-                        <button
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-between"
-                            onMouseEnter={() => setSubmenuOpen('turnInto')}
-                            onClick={() => setSubmenuOpen(submenuOpen === 'turnInto' ? null : 'turnInto')}
-                        >
-                            <div className="flex items-center gap-2">
-                                <ArrowRightLeft className="w-4 h-4" /> <span>Turn into</span>
-                            </div>
-                            <ChevronRight className="w-3 h-3 text-gray-400" />
-                        </button>
+    if (!position && !aiModalOpen) return null;
 
-                        {submenuOpen === 'turnInto' && (
-                            <div
-                                className="absolute top-0 left-full ml-1 w-48 bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 py-1"
-                                onMouseEnter={() => setSubmenuOpen('turnInto')}
-                                onMouseLeave={() => setSubmenuOpen(null)}
-                            >
-                                <button onClick={() => turnInto('paragraph')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <Type className="w-4 h-4" /> <span>Text</span>
-                                </button>
-                                <button onClick={() => turnInto('heading', 1)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <Heading1 className="w-4 h-4" /> <span>Heading 1</span>
-                                </button>
-                                <button onClick={() => turnInto('heading', 2)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <Heading2 className="w-4 h-4" /> <span>Heading 2</span>
-                                </button>
-                                <button onClick={() => turnInto('heading', 3)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <Heading3 className="w-4 h-4" /> <span>Heading 3</span>
-                                </button>
-                                <div className="border-t border-gray-100 dark:border-zinc-800 my-1"></div>
-                                <button onClick={() => turnInto('bulletList')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <List className="w-4 h-4" /> <span>Bullet List</span>
-                                </button>
-                                <button onClick={() => turnInto('orderedList')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <ListOrdered className="w-4 h-4" /> <span>Numbered List</span>
-                                </button>
-                                <button onClick={() => turnInto('taskList')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <CheckSquare className="w-4 h-4" /> <span>Todo List</span>
-                                </button>
-                                <div className="border-t border-gray-100 dark:border-zinc-800 my-1"></div>
-                                <button onClick={() => turnInto('blockquote')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <Quote className="w-4 h-4" /> <span>Quote</span>
-                                </button>
-                                <button onClick={() => turnInto('codeBlock')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
-                                    <Code className="w-4 h-4" /> <span>Code</span>
-                                </button>
-                            </div>
-                        )}
+    return (
+        <>
+            {position && createPortal(
+                <div
+                    ref={menuRef}
+                    className="fixed z-50 transition-opacity duration-200"
+                    style={{
+                        top: position.top,
+                        left: position.left,
+                        opacity: 1,
+                    }}
+                >
+                    {/* ... Grip Handle ... */}
+                    <div
+                        className="flex items-center justify-center w-8 h-8 text-gray-400 rounded hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-zinc-800 dark:hover:text-gray-300 cursor-grab active:cursor-grabbing"
+                        draggable="true"
+                        onDragStart={(e) => { e.preventDefault(); }}
+                        onClick={() => {
+                            setMenuOpen(!menuOpen);
+                            setSubmenuOpen(null);
+                        }}
+                    >
+                        <GripVertical className="w-5 h-5" />
                     </div>
 
-                    {/* Color Submenu Trigger */}
-                    <div className="relative group">
-                        <button
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-between"
-                            onMouseEnter={() => setSubmenuOpen('color')}
-                            onClick={() => setSubmenuOpen(submenuOpen === 'color' ? null : 'color')}
-                        >
-                            <div className="flex items-center gap-2">
-                                <Palette className="w-4 h-4" />
-                                <span>Color</span>
-                            </div>
-                            <ChevronRight className="w-3 h-3 text-gray-400" />
-                        </button>
+                    {menuOpen && (
+                        <div className="absolute top-8 left-0 mt-1 w-56 bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 overflow-visible flex flex-col z-10000 py-1">
 
-                        {submenuOpen === 'color' && (
-                            <div
-                                className="absolute top-0 left-full ml-1 w-64 h-80 overflow-y-auto bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 p-1 no-scrollbar"
-                                onMouseEnter={() => setSubmenuOpen('color')}
-                                onMouseLeave={() => setSubmenuOpen(null)}
-                            >
-                                <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase">Text Color</div>
-                                {COLORS.map((c) => (
-                                    <button
-                                        key={`text-${c.name}`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setTextColor(c.color);
-                                        }}
-                                        className="w-full px-2 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 rounded flex items-center gap-2"
+                            <button onClick={openAskAI} className="px-3 py-2 text-left text-sm text-indigo-600 dark:text-indigo-400 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2 font-medium">
+                                <Sparkles className="w-4 h-4" /> <span>Ask AI...</span>
+                            </button>
+
+                            <div className="border-t border-gray-100 dark:border-zinc-800 my-1"></div>
+
+                            {/* Actions */}
+                            <button onClick={duplicateBlock} className="px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                <Copy className="w-4 h-4" /> <span>Duplicate</span>
+                            </button>
+                            {/* ... remaining menu items ... */}
+
+                            {/* Turn Into Submenu Trigger */}
+                            <div className="relative group">
+                                <button
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-between"
+                                    onMouseEnter={() => setSubmenuOpen('turnInto')}
+                                    onClick={() => setSubmenuOpen(submenuOpen === 'turnInto' ? null : 'turnInto')}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <ArrowRightLeft className="w-4 h-4" /> <span>Turn into</span>
+                                    </div>
+                                    <ChevronRight className="w-3 h-3 text-gray-400" />
+                                </button>
+
+                                {submenuOpen === 'turnInto' && (
+                                    <div
+                                        className="absolute top-0 left-full ml-1 w-48 bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 py-1"
+                                        onMouseEnter={() => setSubmenuOpen('turnInto')}
+                                        onMouseLeave={() => setSubmenuOpen(null)}
                                     >
-                                        <div className="w-6 h-6 rounded border border-gray-200 dark:border-zinc-700 flex items-center justify-center text-xs font-medium" style={{ color: c.color }}>A</div>
-                                        <span style={{ color: c.name === 'Default' ? undefined : c.color }}>{c.name}</span>
-                                    </button>
-                                ))}
-
-                                <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase mt-2">Background</div>
-                                {COLORS.map((c) => (
-                                    <button
-                                        key={`bg-${c.name}`}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setBgColor(c.bg);
-                                        }}
-                                        className="w-full px-2 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 rounded flex items-center gap-2"
-                                    >
-                                        <div className="w-6 h-6 rounded flex items-center justify-center text-xs font-medium" style={{ backgroundColor: c.bg }}>A</div>
-                                        <span>{c.name} background</span>
-                                    </button>
-                                ))}
+                                        <button onClick={() => turnInto('paragraph')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Type className="w-4 h-4" /> <span>Text</span>
+                                        </button>
+                                        <button onClick={() => turnInto('bold')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Bold className="w-4 h-4" /> <span>Bold</span>
+                                        </button>
+                                        <button onClick={() => turnInto('heading', 1)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Heading1 className="w-4 h-4" /> <span>Heading 1</span>
+                                        </button>
+                                        <button onClick={() => turnInto('heading', 2)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Heading2 className="w-4 h-4" /> <span>Heading 2</span>
+                                        </button>
+                                        <button onClick={() => turnInto('heading', 3)} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Heading3 className="w-4 h-4" /> <span>Heading 3</span>
+                                        </button>
+                                        <div className="border-t border-gray-100 dark:border-zinc-800 my-1"></div>
+                                        <button onClick={() => turnInto('bulletList')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <List className="w-4 h-4" /> <span>Bullet List</span>
+                                        </button>
+                                        <button onClick={() => turnInto('orderedList')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <ListOrdered className="w-4 h-4" /> <span>Numbered List</span>
+                                        </button>
+                                        <button onClick={() => turnInto('taskList')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <CheckSquare className="w-4 h-4" /> <span>Todo List</span>
+                                        </button>
+                                        <div className="border-t border-gray-100 dark:border-zinc-800 my-1"></div>
+                                        <button onClick={() => turnInto('blockquote')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Quote className="w-4 h-4" /> <span>Quote</span>
+                                        </button>
+                                        <button onClick={() => turnInto('codeBlock')} className="w-full px-3 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center gap-2">
+                                            <Code className="w-4 h-4" /> <span>Code</span>
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
 
-                    <div className="border-t border-gray-200 dark:border-zinc-700 my-1"></div>
+                            {/* Color Submenu Trigger */}
+                            <div className="relative group">
+                                <button
+                                    className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-zinc-800 flex items-center justify-between"
+                                    onMouseEnter={() => setSubmenuOpen('color')}
+                                    onClick={() => setSubmenuOpen(submenuOpen === 'color' ? null : 'color')}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Palette className="w-4 h-4" />
+                                        <span>Color</span>
+                                    </div>
+                                    <ChevronRight className="w-3 h-3 text-gray-400" />
+                                </button>
 
-                    <button onClick={deleteBlock} className="px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
-                        <Trash2 className="w-4 h-4" /> <span>Delete</span>
-                    </button>
+                                {submenuOpen === 'color' && (
+                                    <div
+                                        className="absolute top-0 left-full ml-1 w-64 h-80 overflow-y-auto bg-white dark:bg-zinc-900 rounded-lg shadow-xl border border-gray-200 dark:border-zinc-700 p-1 no-scrollbar"
+                                        onMouseEnter={() => setSubmenuOpen('color')}
+                                        onMouseLeave={() => setSubmenuOpen(null)}
+                                    >
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase">Text Color</div>
+                                        {COLORS.map((c) => (
+                                            <button
+                                                key={`text-${c.name}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setTextColor(c.color);
+                                                }}
+                                                className="w-full px-2 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 rounded flex items-center gap-2"
+                                            >
+                                                <div className="w-6 h-6 rounded border border-gray-200 dark:border-zinc-700 flex items-center justify-center text-xs font-medium" style={{ color: c.color }}>A</div>
+                                                <span style={{ color: c.name === 'Default' ? undefined : c.color }}>{c.name}</span>
+                                            </button>
+                                        ))}
 
-                </div>
+                                        <div className="px-2 py-1.5 text-xs font-semibold text-gray-500 uppercase mt-2">Background</div>
+                                        {COLORS.map((c) => (
+                                            <button
+                                                key={`bg-${c.name}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setBgColor(c.bg);
+                                                }}
+                                                className="w-full px-2 py-1.5 text-left text-sm hover:bg-gray-100 dark:hover:bg-zinc-800 rounded flex items-center gap-2"
+                                            >
+                                                <div className="w-6 h-6 rounded flex items-center justify-center text-xs font-medium" style={{ backgroundColor: c.bg }}>A</div>
+                                                <span>{c.name} background</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="border-t border-gray-200 dark:border-zinc-700 my-1"></div>
+
+                            <button onClick={deleteBlock} className="px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2">
+                                <Trash2 className="w-4 h-4" /> <span>Delete</span>
+                            </button>
+
+                        </div>
+                    )}
+                </div>,
+                document.body
             )}
-        </div>,
-        document.body
+
+            <AIPromptModal
+                isOpen={aiModalOpen}
+                onClose={() => setAiModalOpen(false)}
+                onSubmit={handleAskAI}
+                isLoading={aiLoading}
+                position={position || { top: 0, left: 0 }}
+            />
+        </>
     );
 }
